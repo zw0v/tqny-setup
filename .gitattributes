@@ -1,0 +1,5 @@
+# A .bat with Unix line endings makes cmd.exe jump to the wrong lines.
+# Store and check out these files byte-for-byte with CRLF, always.
+*.bat -text
+*.cmd -text
+*.txt -text

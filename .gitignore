@@ -1,0 +1,11 @@
+# The name registry is your asset list - it holds customer PC names, models,
+# serials and site codes. It must never be published.
+TQNY-Names.csv
+*.csv
+
+# Per-run logs contain machine and network detail.
+logs/
+*.log
+
+# Lock directory created while allocating a number.
+.tqny.lock/
