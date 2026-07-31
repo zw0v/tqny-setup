@@ -31,11 +31,24 @@ set "PROTECTED_NAMES=ZW0V"
 rem How many one-second tries to wait for the registry lock.
 set "LOCK_TRIES=20"
 
+rem Time zone applied by Standard PC setup. Saudi Arabia is UTC+3.
+set "TZ_WANT=Arab Standard Time"
+
 rem ---------------------------------------------------------------------------
 rem  Do not edit below this line
 rem ---------------------------------------------------------------------------
 
-set "TOOL_VERSION=2.0"
+set "TOOL_VERSION=3.0"
+
+rem --- company identity, shown in the banner and on the handover report ------
+set "CO_NAME=TQNY Company - Software Licenses ^& Hardware Solutions"
+set "CO_SITE=tqnyprofile.com"
+set "CO_STORE=tqny.store"
+set "CO_CR=CR 7049547834"
+set "CO_MAROOF=Maroof #358680"
+set "CO_MAIL=info@tqny.store"
+set "CO_PHONE=+966 58 032 4564"
+
 set "SCRIPT_DIR=%~dp0"
 if "%SCRIPT_DIR:~-1%"=="\" set "SCRIPT_DIR=%SCRIPT_DIR:~0,-1%"
 
@@ -58,6 +71,7 @@ set "FORCE_NUM="
 set "SITE=-"
 set "DO_LIST=0"
 set "DO_RELEASE=0"
+set "CUSTOM_NAME="
 set "NO_RENAME=0"
 set "GUARD_HIT="
 set "GUARD_SHORT=protected PC"
@@ -79,15 +93,27 @@ set "D_NIC=-"
 
 call :init_colors
 
-rem No arguments at all means the interactive menu.
-if "%~1"=="" goto menu_start
+rem No arguments at all means the interactive menu. Tested via a variable, not
+rem  if "%~1"=="" , because a quoted switch value such as
+rem  /db:"\\srv\my share\n.csv" keeps its quotes inside the token and would
+rem  make that comparison a syntax error.
+set "A1=%~1"
+if not defined A1 goto menu_start
+set "A1="
 
 rem ---------------------------------------------------------------------------
 rem  Parse arguments
 rem ---------------------------------------------------------------------------
 :parse
-if "%~1"=="" goto parsed
+rem  /db:"\\srv\my share\n.csv" keeps its quotes inside the token, and an
+rem  embedded quote makes both  if "%~1"==""  and every  if "!A!"=="..."  below
+rem  a syntax error. So capture into a variable first, test emptiness on the
+rem  variable, then strip the quotes. Windows paths and computer names cannot
+rem  contain a quote, so removing them all is safe.
 set "A=%~1"
+if not defined A goto parsed
+set "A=!A:"=!"
+if not defined A ( shift & goto parse )
 if /i "!A!"=="/apply"        ( set "MODE=apply"      & shift & goto parse )
 if /i "!A!"=="/preview"      ( set "MODE=preview"    & shift & goto parse )
 if /i "!A!"=="/list"         ( set "DO_LIST=1"       & shift & goto parse )
@@ -106,6 +132,7 @@ if /i "!A!"=="--help" goto usage
 if /i "!A:~0,6!"=="/name:" ( set "FORCE_NUM=!A:~6!" & shift & goto parse )
 if /i "!A:~0,6!"=="/site:" ( set "SITE=!A:~6!"      & shift & goto parse )
 if /i "!A:~0,8!"=="/prefix:" ( set "PREFIX=!A:~8!"  & shift & goto parse )
+if /i "!A:~0,9!"=="/setname:" ( set "CUSTOM_NAME=!A:~9!" & shift & goto parse )
 if /i "!A:~0,4!"=="/db:"   ( set "DB_FILE=!A:~4!"   & set "DB_EXPLICIT=1" & shift & goto parse )
 echo [ERROR] Unknown option: !A!
 echo Run  "%~nx0" /?  for help.
@@ -117,6 +144,14 @@ call :show_switches
 goto hardexit
 
 :parsed
+
+rem --- Strip quotes the shell left inside a switch value. Without this,
+rem  /db:"\\server\my share\names.csv" keeps its quotes and every path built
+rem  from it is malformed.
+if defined DB_FILE     set "DB_FILE=!DB_FILE:"=!"
+if defined CUSTOM_NAME set "CUSTOM_NAME=!CUSTOM_NAME:"=!"
+if defined PREFIX      set "PREFIX=!PREFIX:"=!"
+if defined SITE        set "SITE=!SITE:"=!"
 
 rem --- fail fast on a bad /prefix: before we bother asking for admin rights --
 call :validate_prefix
@@ -237,10 +272,12 @@ if "%NO_RENAME%"=="1" (
 ) else (
     call :menu_item 2 "Rename this PC" "assign the next free %PREFIX% name"
 )
-call :menu_item 3 "Check the internet" "read only, changes nothing"
-call :menu_item 4 "Make this PC visible on the network" ""
-call :menu_item 5 "Name registry" "list / prefix / release"
-call :menu_item 6 "Troubleshooting and info" ""
+call :menu_item 3 "Network" "internet / visibility / remote access"
+call :menu_item 4 "Standard PC setup" "power, time, drives, printer"
+call :menu_item 5 "Health check" "disk, updates, antivirus, BitLocker"
+call :menu_item 6 "System info + handover report" ""
+call :menu_item 7 "Name registry" "list / prefix / release"
+call :menu_item 8 "Troubleshooting and info" ""
 echo.
 echo    %C_G%[0]%C_0%  Exit
 echo.
@@ -249,12 +286,14 @@ set "SEL="
 set /p "SEL=   Type a number and press Enter: "
 if not defined SEL goto menu_empty
 set "EMPTYIN=0"
-if "%SEL%"=="1" ( call :act_full     & goto main_menu )
-if "%SEL%"=="2" ( call :act_rename   & goto main_menu )
-if "%SEL%"=="3" ( call :act_diag     & goto main_menu )
-if "%SEL%"=="4" ( call :act_share    & goto main_menu )
-if "%SEL%"=="5" ( call :menu_registry& goto main_menu )
-if "%SEL%"=="6" ( call :menu_tools   & goto main_menu )
+if "%SEL%"=="1" ( call :act_full      & goto main_menu )
+if "%SEL%"=="2" ( call :act_rename    & goto main_menu )
+if "%SEL%"=="3" ( call :menu_network  & goto main_menu )
+if "%SEL%"=="4" ( call :menu_pcsetup  & goto main_menu )
+if "%SEL%"=="5" ( call :act_health    & goto main_menu )
+if "%SEL%"=="6" ( call :act_handover  & goto main_menu )
+if "%SEL%"=="7" ( call :menu_registry & goto main_menu )
+if "%SEL%"=="8" ( call :menu_tools    & goto main_menu )
 if "%SEL%"=="0" goto cleanup
 goto main_menu
 
@@ -272,37 +311,18 @@ echo    %C_G%[%~1]%C_0%  !L:~0,35! %C_D%%~3%C_0%
 endlocal
 exit /b 0
 
-rem --- banner and live machine state, redrawn on every screen
+rem --- banner, redrawn on every screen.
+rem  Deliberately shows NO machine, network or registry detail. That data is
+rem  available on demand under Troubleshooting instead.
 :draw_header
 cls
-call :probe_net_fast
-set "DBCOUNT=0"
-if exist "%DB_FILE%" for /f %%c in ('type "%DB_FILE%" ^| find /c /v "" 2^>nul') do set /a "DBCOUNT=%%c-1"
-if !DBCOUNT! LSS 0 set "DBCOUNT=0"
 echo.
 echo  %C_C%=====================================================================%C_0%
 echo    %C_W%TQNY IT SETUP TOOL%C_0%  v%TOOL_VERSION%
+echo    %C_D%%CO_SITE%   %CO_CR%   %CO_MAROOF%%C_0%
 echo  %C_C%=====================================================================%C_0%
-echo    Machine  : %C_W%%M_NAME%%C_0%      Model    : %M_MODEL%
-echo    Network  : %H_NIC%  %H_IP%      Internet : %H_NET%
-echo    Profile  : %H_CAT%
-echo    Prefix   : %C_W%%PREFIX%%C_0%      Registry : !DBCOUNT! names assigned
 if "%ADMIN%"=="0" echo    %C_Y%RUNNING WITHOUT ADMIN - changes are disabled%C_0%
 if "%NO_RENAME%"=="1" echo    %C_R%PROTECTED MACHINE - this PC will never be renamed%C_0%
-echo  %C_D%--------------------------------------------------------------------%C_0%
-exit /b 0
-
-rem --- fast network probe for the header. No pings, no web test.
-:probe_net_fast
-set "H_NIC=-"
-set "H_IP=-"
-set "H_CAT=-"
-set "H_NET=-"
-%PS% "$ErrorActionPreference='SilentlyContinue'; $a=Get-NetAdapter -Physical | Where-Object{$_.Status -eq 'Up'} | Sort-Object ifIndex | Select-Object -First 1; if(-not $a){'H_NIC=none'; exit}; 'H_NIC='+$a.Name; $c=Get-NetIPConfiguration -InterfaceIndex $a.ifIndex; 'H_IP='+$c.IPv4Address.IPAddress; $p=Get-NetConnectionProfile -InterfaceIndex $a.ifIndex; 'H_CAT='+$p.NetworkCategory; 'H_NET='+$p.IPv4Connectivity" > "%PSOUT%" 2>nul
-for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do set "%%A=%%B"
-if /i "%H_CAT%"=="Public"  set "H_CAT=%C_Y%Public - NOT visible on the network%C_0%"
-if /i "%H_CAT%"=="Private" set "H_CAT=%C_G%Private - visible on the network%C_0%"
-if /i "%H_NET%"=="Internet" set "H_NET=%C_G%OK%C_0%"
 exit /b 0
 
 rem ---------------------------------------------------------------------------
@@ -344,7 +364,24 @@ if "%NO_RENAME%"=="1" (
     call :pause_return
     exit /b 0
 )
+echo.
+echo    This PC is currently named %C_W%%M_NAME%%C_0%
+echo.
+call :menu_item 1 "Take the next free number" "prefix %PREFIX%, e.g. %PREFIX%-04"
+call :menu_item 2 "Type a name myself" "e.g. RECEPTION-PC"
+echo.
+echo    %C_G%[0]%C_0%  Back
+echo.
+set "SEL="
+set /p "SEL=   Type a number and press Enter: "
+if "%SEL%"=="0" exit /b 0
+if not defined SEL exit /b 0
 set "MODE=preview"
+set "CUSTOM_NAME="
+if "%SEL%"=="2" (
+    call :ask_custom_name
+    if errorlevel 1 ( call :pause_return & exit /b 0 )
+)
 call :step_guard
 call :step_domain
 call :step_alloc
@@ -387,6 +424,320 @@ echo.
 echo    %C_Y%Not running as Administrator, so nothing can be applied.%C_0%
 echo    Close this window and start the tool again, choosing Yes at the
 echo    Administrator prompt.
+call :pause_return
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Sub-menu: network
+rem ---------------------------------------------------------------------------
+:menu_network
+call :draw_header
+echo.
+call :menu_item 1 "Check the internet" "read only, changes nothing"
+call :menu_item 2 "Make this PC visible on the network" ""
+call :menu_item 3 "Remote Desktop" "let you connect to this PC later"
+call :menu_item 4 "Show connection details" "hostname, IP, who is logged on"
+echo.
+echo    %C_G%[0]%C_0%  Back
+echo.
+echo  %C_D%--------------------------------------------------------------------%C_0%
+set "SEL="
+set /p "SEL=   Type a number and press Enter: "
+if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
+if "%SEL%"=="1" ( call :act_diag    & goto menu_network )
+if "%SEL%"=="2" ( call :act_share   & goto menu_network )
+if "%SEL%"=="3" ( call :act_rdp     & goto menu_network )
+if "%SEL%"=="4" ( call :act_conninfo& goto menu_network )
+if "%SEL%"=="0" exit /b 0
+goto menu_network
+
+:act_conninfo
+call :draw_header
+call :hdr "How to reach this PC"
+%PS% "$ErrorActionPreference='SilentlyContinue'; 'Computer name : '+$env:COMPUTERNAME; 'Logged on as  : '+$env:USERDOMAIN+'\'+$env:USERNAME; $ips=Get-NetIPAddress -AddressFamily IPv4 | Where-Object{$_.IPAddress -notlike '169.254.*' -and $_.IPAddress -ne '127.0.0.1'} | Sort-Object InterfaceIndex; foreach($i in $ips){'IP address    : '+$i.IPAddress+'  on '+$i.InterfaceAlias}; $rdp=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections).fDenyTSConnections; 'Remote Desktop: '+$(if($rdp -eq 0){'ENABLED'}else{'disabled'}); 'WinRM service : '+(Get-Service WinRM).Status" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" "  "
+call :say ""
+call :say "  Give the customer the computer name or the IP to let you connect."
+call :pause_return
+exit /b 0
+
+:act_rdp
+call :draw_header
+call :hdr "Remote Desktop"
+%PS% "$ErrorActionPreference='SilentlyContinue'; $d=(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections).fDenyTSConnections; 'RDP_STATE='+$(if($d -eq 0){'ENABLED'}else{'disabled'}); $p=Get-NetConnectionProfile | Where-Object{$_.IPv4Connectivity -ne 'Disconnected'} | Select-Object -First 1; 'RDP_PROF='+$p.NetworkCategory" > "%PSOUT%" 2>nul
+set "RDP_STATE=unknown"
+set "RDP_PROF=unknown"
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do set "%%A=%%B"
+call :say "  Remote Desktop is currently: %RDP_STATE%"
+call :say "  This network profile is    : %RDP_PROF%"
+call :say ""
+call :say "  Turning this on lets anyone who can reach this PC on the network"
+call :say "  attempt a login. Only do it on a trusted network, and only for a"
+call :say "  customer who has asked you to support the PC remotely."
+if /i "%RDP_PROF%"=="Public" call :say "  [WARN] This is a Public network. Enabling RDP here is risky."
+if /i "%RDP_STATE%"=="ENABLED" (
+    call :say ""
+    call :say "  [SKIP] Already enabled. Nothing to do."
+    call :pause_return
+    exit /b 0
+)
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Enable Remote Desktop on this PC?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
+%PS% "try{Set-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0 -ErrorAction Stop; Get-NetFirewallRule -Group '@FirewallAPI.dll,-28752' -ErrorAction Stop | Set-NetFirewallRule -Enabled True -ErrorAction Stop; 'RD=OK'}catch{'RD=FAIL'}" > "%PSOUT%" 2>nul
+findstr /b /c:"RD=OK" "%PSOUT%" >nul 2>&1
+if not errorlevel 1 (
+    call :say "  [OK] Remote Desktop enabled and allowed through the firewall."
+) else (
+    call :say "  [FAIL] Could not enable Remote Desktop."
+)
+call :pause_return
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Sub-menu: standard PC setup
+rem ---------------------------------------------------------------------------
+:menu_pcsetup
+call :draw_header
+echo.
+call :menu_item 1 "Never sleep" "power plan for an office PC"
+call :menu_item 2 "Time zone and clock sync" "%TZ_WANT%"
+call :menu_item 3 "Set the computer description" "shown to others on the network"
+call :menu_item 4 "Map a network drive" ""
+call :menu_item 5 "Add a network printer" ""
+echo.
+echo    %C_G%[0]%C_0%  Back
+echo.
+echo  %C_D%--------------------------------------------------------------------%C_0%
+set "SEL="
+set /p "SEL=   Type a number and press Enter: "
+if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
+if "%SEL%"=="1" ( call :act_power   & goto menu_pcsetup )
+if "%SEL%"=="2" ( call :act_time    & goto menu_pcsetup )
+if "%SEL%"=="3" ( call :act_desc    & goto menu_pcsetup )
+if "%SEL%"=="4" ( call :act_mapdrv  & goto menu_pcsetup )
+if "%SEL%"=="5" ( call :act_printer & goto menu_pcsetup )
+if "%SEL%"=="0" exit /b 0
+goto menu_pcsetup
+
+:act_power
+call :draw_header
+call :hdr "Power plan"
+for /f "tokens=*" %%P in ('powercfg /getactivescheme') do call :say "  Now: %%P"
+call :say ""
+call :say "  Would set, on mains power:"
+call :say "     sleep            never"
+call :say "     hibernate        never"
+call :say "     monitor off      after 15 minutes"
+call :say "     disk off         never"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Apply this power plan?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
+powercfg /change standby-timeout-ac 0 >nul 2>&1
+powercfg /change hibernate-timeout-ac 0 >nul 2>&1
+powercfg /change monitor-timeout-ac 15 >nul 2>&1
+powercfg /change disk-timeout-ac 0 >nul 2>&1
+if not errorlevel 1 (
+    call :say "  [OK] The PC will no longer go to sleep on mains power."
+) else (
+    call :say "  [FAIL] powercfg refused. Are you running as Administrator?"
+)
+call :pause_return
+exit /b 0
+
+:act_time
+call :draw_header
+call :hdr "Time zone and clock"
+call :say "  Current time zone : %M_TZ%"
+call :say "  Current time      : %DATE% %TIME%"
+call :say ""
+call :say "  Would set the time zone to %TZ_WANT% and resync the clock"
+call :say "  against time.windows.com."
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Set the time zone and resync?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
+tzutil /s "%TZ_WANT%" >nul 2>&1
+if errorlevel 1 ( call :say "  [FAIL] Could not set the time zone." ) else ( call :say "  [OK] Time zone set to %TZ_WANT%." )
+sc config w32time start= auto >nul 2>&1
+net start w32time >nul 2>&1
+w32tm /resync /force >nul 2>&1
+if errorlevel 1 ( call :say "  [WARN] Clock resync did not complete. Check the internet connection." ) else ( call :say "  [OK] Clock resynced." )
+call :pause_return
+exit /b 0
+
+:act_desc
+call :draw_header
+call :hdr "Computer description"
+call :say "  This is the friendly text other people see beside this PC when"
+call :say "  they browse the network. It is not the computer name."
+call :say ""
+call :say "  Current description: %M_DESC%"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+set "NEWDESC="
+set /p "NEWDESC=   New description, or press Enter to leave it: "
+if not defined NEWDESC exit /b 0
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters" /v srvcomment /t REG_SZ /d "%NEWDESC%" /f >nul 2>&1
+if errorlevel 1 (
+    call :say "  [FAIL] Could not write the description."
+) else (
+    call :say "  [OK] Description set to: %NEWDESC%"
+    set "M_DESC=%NEWDESC%"
+)
+call :pause_return
+exit /b 0
+
+:act_mapdrv
+call :draw_header
+call :hdr "Map a network drive"
+net use
+echo.
+set "MD_L="
+set /p "MD_L=   Drive letter, e.g. S : "
+if not defined MD_L exit /b 0
+set "MD_P="
+set /p "MD_P=   Folder, e.g. \\server\share : "
+if not defined MD_P exit /b 0
+echo.
+call :confirm "   Map %MD_L%: to %MD_P% permanently?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
+net use %MD_L%: "%MD_P%" /persistent:yes > "%PSOUT%" 2>&1
+if errorlevel 1 (
+    call :say "  [FAIL] Could not map the drive:"
+    call :sayfile "%PSOUT%" "         "
+) else (
+    call :say "  [OK] %MD_L%: now points at %MD_P%"
+)
+call :pause_return
+exit /b 0
+
+:act_printer
+call :draw_header
+call :hdr "Add a network printer"
+call :say "  Existing printers:"
+%PS% "$ErrorActionPreference='SilentlyContinue'; Get-Printer | Select-Object -ExpandProperty Name" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" "    "
+echo.
+set "PR_P="
+set /p "PR_P=   Printer path, e.g. \\server\printer : "
+if not defined PR_P exit /b 0
+echo.
+call :confirm "   Add %PR_P%?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
+rundll32 printui.dll,PrintUIEntry /in /n "%PR_P%" /q
+if errorlevel 1 (
+    call :say "  [FAIL] Could not add the printer. Check the path and that the"
+    call :say "         print server is reachable."
+) else (
+    call :say "  [OK] Printer added."
+)
+call :pause_return
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Health check - entirely read-only
+rem ---------------------------------------------------------------------------
+:act_health
+call :draw_header
+call :hdr "Health check - read only, nothing is changed"
+call :say "  Working, this takes a few seconds..."
+call :say ""
+%PS% "$ErrorActionPreference='SilentlyContinue';" ^
+ "$o=New-Object System.Collections.ArrayList;" ^
+ "$os=Get-CimInstance Win32_OperatingSystem;" ^
+ "[void]$o.Add('Windows        : '+$os.Caption+'  build '+$os.BuildNumber);" ^
+ "$up=(Get-Date)-$os.LastBootUpTime; [void]$o.Add('Uptime         : '+[int]$up.TotalDays+'d '+$up.Hours+'h');" ^
+ "$lic=Get-CimInstance SoftwareLicensingProduct | Where-Object{$_.PartialProductKey -and $_.Name -like 'Windows*'} | Select-Object -First 1;" ^
+ "[void]$o.Add('Activation     : '+$(if($lic.LicenseStatus -eq 1){'ACTIVATED'}else{'NOT ACTIVATED'}));" ^
+ "foreach($d in Get-PhysicalDisk){[void]$o.Add('Disk health    : '+$d.FriendlyName+' -> '+$d.HealthStatus)};" ^
+ "foreach($v in (Get-Volume | Where-Object{$_.DriveLetter -and $_.FileSystemType})){$fp=0; if($v.Size -gt 0){$fp=[math]::Round($v.SizeRemaining/$v.Size*100)}; $flag=''; if($fp -lt 10){$flag='  <-- LOW'}; [void]$o.Add('Free space     : '+$v.DriveLetter+': '+[math]::Round($v.SizeRemaining/1GB)+' GB of '+[math]::Round($v.Size/1GB)+' GB  ('+$fp+[char]37+')'+$flag)};" ^
+ "$av=Get-CimInstance -Namespace root\SecurityCenter2 -ClassName AntiVirusProduct; if($av){foreach($a in $av){[void]$o.Add('Antivirus      : '+$a.displayName)}}else{[void]$o.Add('Antivirus      : none reported')};" ^
+ "$bl=Get-BitLockerVolume -ErrorAction SilentlyContinue; if($bl){foreach($b in $bl){[void]$o.Add('BitLocker      : '+$b.MountPoint+' '+$b.ProtectionStatus)}}else{[void]$o.Add('BitLocker      : not readable without Administrator')};" ^
+ "$pend=$false; if(Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'){$pend=$true}; if(Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'){$pend=$true};" ^
+ "[void]$o.Add('Pending reboot : '+$(if($pend){'YES - this PC needs restarting'}else{'no'}));" ^
+ "$b=Get-CimInstance Win32_Battery; if($b){foreach($x in $b){[void]$o.Add('Battery        : '+$x.EstimatedChargeRemaining+[char]37+' remaining')}};" ^
+ "$ev=Get-WinEvent -FilterHashtable @{LogName='System';Level=1,2;StartTime=(Get-Date).AddDays(-7)} -MaxEvents 200 -ErrorAction SilentlyContinue;" ^
+ "[void]$o.Add('Errors 7 days  : '+$(if($ev){$ev.Count}else{0})+' critical or error events in the System log');" ^
+ "$o" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" "  "
+call :say ""
+call :say "  Nothing above was changed. This screen only reports."
+call :pause_return
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  System info and handover report
+rem ---------------------------------------------------------------------------
+:act_handover
+call :draw_header
+call :hdr "System information"
+%PS% "$ErrorActionPreference='SilentlyContinue';" ^
+ "$cs=Get-CimInstance Win32_ComputerSystem; $os=Get-CimInstance Win32_OperatingSystem; $bi=Get-CimInstance Win32_BIOS;" ^
+ "'Computer name  : '+$env:COMPUTERNAME;" ^
+ "'Manufacturer   : '+$cs.Manufacturer;" ^
+ "'Model          : '+$cs.Model;" ^
+ "'Serial number  : '+$bi.SerialNumber;" ^
+ "'BIOS date      : '+$bi.ReleaseDate;" ^
+ "'Processor      : '+(Get-CimInstance Win32_Processor | Select-Object -First 1).Name;" ^
+ "'Memory         : '+[math]::Round($cs.TotalPhysicalMemory/1GB)+' GB';" ^
+ "foreach($d in (Get-Disk)){'Disk           : '+$d.FriendlyName+'  '+[math]::Round($d.Size/1GB)+' GB'};" ^
+ "'Windows        : '+$os.Caption+'  build '+$os.BuildNumber;" ^
+ "'Installed on   : '+$os.InstallDate;" ^
+ "'Logged on as   : '+$env:USERDOMAIN+'\'+$env:USERNAME" > "%WORK%\sys.txt" 2>nul
+call :sayfile "%WORK%\sys.txt" "  "
+call :say ""
+echo.
+call :confirm "   Write a handover sheet for the customer?"
+if errorlevel 1 ( call :pause_return & exit /b 0 )
+rem The sheet records the network as handed over, so make sure it was actually
+rem measured. Read-only, exactly the same check as menu option [3].
+if "%DNS_OK%"=="?" (
+    call :say ""
+    call :say "  Checking the network first, this takes a few seconds..."
+    call :step_diag
+)
+md "%SCRIPT_DIR%\handover" 2>nul
+set "HOF=%SCRIPT_DIR%\handover\%M_NAME%-%STAMP%.txt"
+> "%HOF%" echo ===============================================================
+>>"%HOF%" echo  %CO_NAME%
+>>"%HOF%" echo  %CO_SITE%   %CO_STORE%
+>>"%HOF%" echo  %CO_CR%   %CO_MAROOF%
+>>"%HOF%" echo  %CO_MAIL%   %CO_PHONE%
+>>"%HOF%" echo ===============================================================
+>>"%HOF%" echo.
+>>"%HOF%" echo  PC HANDOVER SHEET
+>>"%HOF%" echo.
+>>"%HOF%" echo  Date        : %NOW% UTC
+>>"%HOF%" echo  Technician  : %TECH%
+>>"%HOF%" echo  Site        : %SITE%
+>>"%HOF%" echo.
+>>"%HOF%" echo  Computer name before : %M_NAME%
+if defined TARGET (>>"%HOF%" echo  Computer name after  : %TARGET%) else (>>"%HOF%" echo  Computer name after  : unchanged)
+>>"%HOF%" echo  Hardware ID          : %FP%  ^(%FPTYPE%^)
+>>"%HOF%" echo.
+>>"%HOF%" echo  ---------------------------------------------------------------
+>>"%HOF%" echo  SPECIFICATION
+>>"%HOF%" echo  ---------------------------------------------------------------
+for /f "usebackq delims=" %%L in ("%WORK%\sys.txt") do >>"%HOF%" echo  %%L
+>>"%HOF%" echo.
+>>"%HOF%" echo  ---------------------------------------------------------------
+>>"%HOF%" echo  NETWORK AT HANDOVER
+>>"%HOF%" echo  ---------------------------------------------------------------
+>>"%HOF%" echo  Adapter   : %D_NIC%
+>>"%HOF%" echo  IPv4      : %D_IPV4%
+>>"%HOF%" echo  Gateway   : %D_GW%
+>>"%HOF%" echo  DNS       : %D_DNS%
+>>"%HOF%" echo  Internet  : DNS=%DNS_OK%  WEB=%WEB_OK%
+>>"%HOF%" echo.
+>>"%HOF%" echo  ---------------------------------------------------------------
+>>"%HOF%" echo  Prepared with TQNY-Setup v%TOOL_VERSION%
+>>"%HOF%" echo  %CO_SITE%  -  %CO_MAIL%  -  %CO_PHONE%
+>>"%HOF%" echo ===============================================================
+call :say "  [OK] Handover sheet written to:"
+call :say "       %HOF%"
 call :pause_return
 exit /b 0
 
@@ -514,9 +865,9 @@ exit /b 0
 call :draw_header
 call :hdr "Network detail"
 %PS% "$ErrorActionPreference='SilentlyContinue'; Get-NetAdapter | Sort-Object ifIndex | Format-Table -AutoSize Name,Status,LinkSpeed,MacAddress,InterfaceDescription | Out-String -Width 200" > "%PSOUT%" 2>nul
-for /f "usebackq delims=" %%L in ("%PSOUT%") do call :say "%%L"
+call :sayfile "%PSOUT%" ""
 %PS% "$ErrorActionPreference='SilentlyContinue'; Get-NetIPConfiguration | Format-List InterfaceAlias,IPv4Address,IPv4DefaultGateway,DNSServer | Out-String -Width 200" > "%PSOUT%" 2>nul
-for /f "usebackq delims=" %%L in ("%PSOUT%") do call :say "%%L"
+call :sayfile "%PSOUT%" ""
 call :pause_return
 exit /b 0
 
@@ -526,7 +877,7 @@ call :hdr "Discovery services"
 call :say "  These must run for this PC to appear under Network on other PCs."
 call :say ""
 %PS% "$ErrorActionPreference='SilentlyContinue'; Get-Service FDResPub,fdPHost,SSDPSRV,upnphost,LanmanServer,LanmanWorkstation | Format-Table -AutoSize Name,Status,StartType,DisplayName | Out-String -Width 200" > "%PSOUT%" 2>nul
-for /f "usebackq delims=" %%L in ("%PSOUT%") do call :say "%%L"
+call :sayfile "%PSOUT%" ""
 call :pause_return
 exit /b 0
 
@@ -543,6 +894,7 @@ echo     /prefix:ACME     Use a different name prefix, giving ACME-01, ACME-02.
 echo                      Default is %TQNY_PREFIX%. Each prefix numbers separately.
 echo     /ask             Ask for the prefix on screen before doing anything.
 echo     /name:07         Force a specific number instead of the next free one.
+echo     /setname:NAME    Use this exact computer name instead of numbering.
 echo     /site:JED        Tag this machine with a site code in the registry.
 echo     /db:PATH         Use a different registry file, e.g. on a shared drive.
 echo.
@@ -610,6 +962,13 @@ if errorlevel 1 goto a_after
 call :db_init
 call :db_scan
 
+rem A name typed by hand wins over everything and replaces any existing row.
+if defined CUSTOM_NAME (
+    set "TARGET=%CUSTOM_NAME%"
+    set "N=0"
+    call :say "  [OK] Using the name you typed: %CUSTOM_NAME%"
+    goto a_done
+)
 if defined FOUND_OTHER (
     call :say "  [WARN] This PC is already registered as %FOUND_OTHER%, under another prefix."
     call :say "         It will be given a new %PREFIX% name and the old entry released."
@@ -677,10 +1036,17 @@ if /i "%TARGET%"=="%M_NAME%" (
 if not "%MODE%"=="apply" goto a_preview
 if not defined TARGET goto a_end
 if "%NO_RENAME%"=="1" goto a_blocked
+if defined CUSTOM_NAME goto a_customclaim
 if defined FOUND_NUM goto a_touch
 if defined FOUND_OTHER call :db_drop_fp
 >>"%DB_FILE%" echo %N%,%TARGET%,%FP%,%FPTYPE%,%M_NAME%,%M_MODEL%,%M_SERIAL%,%NOW%,%NOW%,%TECH%,%SITE%
 call :say "  [OK] Claimed %TARGET% in the registry."
+goto a_end
+:a_customclaim
+rem Number 0 marks a free-form name: it belongs to no prefix sequence.
+call :db_drop_fp
+>>"%DB_FILE%" echo 0,%TARGET%,%FP%,%FPTYPE%,%M_NAME%,%M_MODEL%,%M_SERIAL%,%NOW%,%NOW%,%TECH%,%SITE%
+call :say "  [OK] Recorded %TARGET% in the registry."
 goto a_end
 :a_touch
 call :db_touch
@@ -737,7 +1103,7 @@ if not errorlevel 1 (
     goto r_after
 )
 call :say "  [FAIL] Could not rename this PC. Details follow."
-for /f "usebackq delims=" %%L in ("%PSOUT%") do call :say "         %%L"
+call :sayfile "%PSOUT%" "         "
 set "EXITCODE=4"
 :r_after
 call :say ""
@@ -996,7 +1362,9 @@ exit /b 0
 rem --- read machine facts and build the hardware fingerprint
 :gather_facts
 md "%LOG_DIR%" 2>nul
-%PS% "$ErrorActionPreference='SilentlyContinue'; function E($v){$s=[string]$v; if($s.Trim()){($s -replace '[^A-Za-z0-9 ._:-]','').Trim()}else{'-'}}; $cs=Get-CimInstance Win32_ComputerSystem; 'NAME='+(E $cs.Name); 'INDOMAIN='+(E $cs.PartOfDomain); 'DOMAIN='+(E $cs.Domain); 'MODEL='+(E $cs.Model); $bs=[string](Get-CimInstance Win32_BaseBoard).SerialNumber; if($bs -match 'Default string|To be filled|None'){$bs=''}; 'SERIAL='+(E $bs); 'UUID='+(E (Get-CimInstance Win32_ComputerSystemProduct).UUID); $a=Get-NetAdapter -Physical | Where-Object{$_.MacAddress} | Sort-Object @{e={if($_.MediaType -eq '802.3'){0}else{1}}},ifIndex | Select-Object -First 1; 'MAC='+(E ($a.MacAddress -replace '[^A-Fa-f0-9]','')); 'NIC='+(E $a.Name)" > "%PSOUT%" 2>nul
+%PS% "$ErrorActionPreference='SilentlyContinue'; function E($v){$s=[string]$v; if($s.Trim()){($s -replace '[^A-Za-z0-9 ._:-]','').Trim()}else{'-'}}; $cs=Get-CimInstance Win32_ComputerSystem; 'NAME='+(E $cs.Name); 'INDOMAIN='+(E $cs.PartOfDomain); 'DOMAIN='+(E $cs.Domain); 'MODEL='+(E $cs.Model); $bs=[string](Get-CimInstance Win32_BaseBoard).SerialNumber; if($bs -match 'Default string|To be filled|None'){$bs=''}; 'SERIAL='+(E $bs); 'UUID='+(E (Get-CimInstance Win32_ComputerSystemProduct).UUID); $a=Get-NetAdapter -Physical | Where-Object{$_.MacAddress} | Sort-Object @{e={if($_.MediaType -eq '802.3'){0}else{1}}},ifIndex | Select-Object -First 1; 'MAC='+(E ($a.MacAddress -replace '[^A-Fa-f0-9]','')); 'NIC='+(E $a.Name); 'TZ='+(E (Get-TimeZone).Id); 'DESC='+(E (Get-CimInstance Win32_OperatingSystem).Description)" > "%PSOUT%" 2>nul
+set "M_TZ=-"
+set "M_DESC=(not set)"
 set "M_NAME=-"
 set "M_INDOMAIN=False"
 set "M_DOMAIN=-"
@@ -1065,6 +1433,63 @@ echo.
 echo  %C_D%--------------------------------------------------------------------%C_0%
 set "ANS="
 set /p "ANS=   Press Enter to return to the menu: "
+exit /b 0
+
+rem --- ask for a free-form computer name and validate it. errorlevel 1 = reject
+:ask_custom_name
+echo.
+set "CUSTOM_NAME="
+set /p "CUSTOM_NAME=   New computer name: "
+if not defined CUSTOM_NAME exit /b 1
+call :validate_name "%CUSTOM_NAME%"
+if errorlevel 1 (
+    set "CUSTOM_NAME="
+    exit /b 1
+)
+echo.
+echo    %C_G%%CUSTOM_NAME% is free and valid.%C_0%
+exit /b 0
+
+rem --- is a typed name legal, unused in the registry and unused on the LAN?
+:validate_name
+set "VN=%~1"
+echo %VN%| findstr /r /c:"^[A-Za-z0-9][A-Za-z0-9-]*$" >nul 2>&1
+if errorlevel 1 (
+    echo    %C_R%Not valid. Use only letters, digits and hyphens, and start%C_0%
+    echo    %C_R%with a letter or digit. No spaces or underscores.%C_0%
+    exit /b 1
+)
+if "%VN:~-1%"=="-" (
+    echo    %C_R%A computer name cannot end with a hyphen.%C_0%
+    exit /b 1
+)
+echo %VN%| findstr /r /c:"^[0-9][0-9]*$" >nul 2>&1
+if not errorlevel 1 (
+    echo    %C_R%Windows rejects an all-numeric computer name.%C_0%
+    exit /b 1
+)
+call :strlen "%VN%" VNLEN
+if %VNLEN% GTR 15 (
+    echo    %C_R%%VN% is %VNLEN% characters. The maximum is 15.%C_0%
+    exit /b 1
+)
+call :name_in_db "%VN%"
+if not errorlevel 1 (
+    echo    %C_R%%VN% is already in the name registry. Pick another.%C_0%
+    exit /b 1
+)
+call :name_free "%VN%"
+if errorlevel 1 (
+    echo    %C_R%%VN% already answers on this network. Pick another.%C_0%
+    exit /b 1
+)
+exit /b 0
+
+rem --- is a name already recorded in the registry?  errorlevel 0 = yes
+:name_in_db
+if not exist "%DB_FILE%" exit /b 1
+findstr /i /c:",%~1," "%DB_FILE%" >nul 2>&1
+if errorlevel 1 exit /b 1
 exit /b 0
 
 rem --- zero-padded candidate name for a number -> PADDED_NAME
@@ -1206,7 +1631,11 @@ for /f "usebackq skip=1 tokens=1-11 delims=," %%a in ("%DB_FILE%") do (
     set "RN=%%b"
     set "SAMEPFX=0"
     if /i "!RN:~0,%PFXLEN%!"=="%PFX%" set "SAMEPFX=1"
-    if "!SAMEPFX!"=="1" if not "%%a"=="" set "NUM_%%a=1"
+    rem Number 0 marks a free-form name. It belongs to no prefix sequence, so
+    rem it must still be recognised as this machine's own row, and it must not
+    rem occupy a number.
+    if "%%a"=="0" set "SAMEPFX=1"
+    if "!SAMEPFX!"=="1" if not "%%a"=="0" if not "%%a"=="" set "NUM_%%a=1"
     if /i "%%c"=="%FP%" (
         if "!SAMEPFX!"=="1" (
             set "FOUND_NUM=%%a"
@@ -1272,6 +1701,22 @@ setlocal EnableDelayedExpansion
 set "MSG=%~1"
 echo(!MSG!
 if defined LOG >>"%LOG%" echo(!MSG!
+endlocal
+exit /b 0
+
+rem --- Dump a captured file line by line, with an optional prefix.
+rem  Text passed as a CALL argument is percent-expanded a SECOND time, which
+rem  silently eats a lone %  - so "48%" came out as "48". Captured output can
+rem  contain %, so it is assigned to a variable and read back with delayed
+rem  expansion instead of being passed to :say as an argument.
+:sayfile
+if not exist "%~1" exit /b 0
+setlocal EnableDelayedExpansion
+for /f "usebackq delims=" %%L in ("%~1") do (
+    set "LN=%~2%%L"
+    echo(!LN!
+    if defined LOG >>"%LOG%" echo(!LN!
+)
 endlocal
 exit /b 0
 

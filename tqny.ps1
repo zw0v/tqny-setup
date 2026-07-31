@@ -2,7 +2,7 @@
 #  TQNY IT Setup - remote launcher
 #
 #  Run from any PC with internet:
-#      irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+#      irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 #
 #  It downloads TQNY-Setup.bat to a temp folder and opens the menu.
 #
@@ -13,14 +13,15 @@
 #  To enable renaming, point it at a registry file you control:
 #
 #      $env:TQNY_DB = '\\server\share\TQNY-Names.csv'
-#      irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+#      irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 # ===========================================================================
 
 $ErrorActionPreference = 'Stop'
 
-$Repo   = 'zw0v/tqny-setup'
-$Branch = 'main'
-$BatUrl = "https://raw.githubusercontent.com/$Repo/$Branch/TQNY-Setup.bat"
+# Secret gist: not listed on the profile, not indexed, reachable only by link,
+# and its raw URL needs no login so this one-liner works anywhere.
+$GistId = '6a91d906258ca360a88265b6dcd28ba6'
+$BatUrl = "https://gist.githubusercontent.com/zw0v/$GistId/raw/TQNY-Setup.bat"
 
 Write-Host ''
 Write-Host '  TQNY IT Setup - remote launcher' -ForegroundColor Cyan
@@ -33,7 +34,7 @@ $dir = Join-Path $env:TEMP ('tqny-' + [Guid]::NewGuid().ToString('N').Substring(
 New-Item -ItemType Directory -Path $dir -Force | Out-Null
 $bat = Join-Path $dir 'TQNY-Setup.bat'
 
-Write-Host "  Downloading from $Repo ..." -ForegroundColor DarkGray
+Write-Host "  Downloading ..." -ForegroundColor DarkGray
 try {
     Invoke-WebRequest -Uri $BatUrl -OutFile $bat -UseBasicParsing
 } catch {
