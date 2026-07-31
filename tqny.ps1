@@ -55,6 +55,9 @@ if ($env:TQNY_DB) {
     Write-Host '  No registry set, so renaming is disabled. See the note at the' -ForegroundColor Yellow
     Write-Host '  top of this launcher to enable it with $env:TQNY_DB.' -ForegroundColor Yellow
 }
+# /menu must come LAST: any switch otherwise routes past the menu into the
+# scripted flow, and it has to follow /remote and /db so both are already set.
+$argList += '/menu'
 Write-Host ''
 
 # Hand over to the batch menu in this same console.

@@ -200,6 +200,9 @@ rem ===========================================================================
 :menu_start
 set "MENU=1"
 title TQNY IT Setup v%TOOL_VERSION%
+rem Reached directly or via /menu, so validate anything already parsed.
+call :validate_prefix
+if errorlevel 1 goto hardexit
 call :set_db_paths
 call :gather_facts
 if errorlevel 1 goto hardexit
@@ -1030,9 +1033,12 @@ if /i "%M_INDOMAIN%"=="True" if not "%FORCE_DOMAIN%"=="1" (
 rem Launched from the internet with no registry reachable: renaming would hand
 rem out a number we cannot record, so refuse it until /db:PATH is supplied.
 if "%REMOTE%"=="1" if not "%DB_EXPLICIT%"=="1" (
+    rem Do not mask an earlier, more important reason such as a protected PC.
+    if "!NO_RENAME!"=="0" (
+        set "GUARD_SHORT=no registry"
+        set "GUARD_HIT=launched from the internet with no name registry reachable - pass /db:PATH to enable renaming"
+    )
     set "NO_RENAME=1"
-    set "GUARD_SHORT=no registry"
-    set "GUARD_HIT=launched from the internet with no name registry reachable - pass /db:PATH to enable renaming"
 )
 %PS% "'U='+(Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss'); 'S='+(Get-Date).ToString('yyyyMMdd-HHmmss')" > "%PSOUT%" 2>nul
 for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do (
