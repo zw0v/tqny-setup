@@ -164,7 +164,7 @@
 
  On any PC with internet, open PowerShell and run:
 
-   irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+   irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 
  That downloads the tool to a temp folder and opens the same menu. Nothing
  is installed and the temp copy is deleted afterwards.
@@ -178,9 +178,9 @@
  To enable renaming, point it at a registry file you control first:
 
    $env:TQNY_DB = '\\server\share\TQNY-Names.csv'
-   irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+   irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 
- The repo must be PUBLIC for the one-liner to work without a token.
+ It is hosted as a SECRET GIST: not listed on the profile, not indexed by search, reachable only by this link - and the raw URL needs no login.
 
 
 ---------------------------------------------------------------------------

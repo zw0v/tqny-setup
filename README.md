@@ -15,7 +15,7 @@ Menu-driven, no install, no dependencies beyond what ships with Windows.
 **On any PC with internet** — open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 ```
 
 **From a USB stick or local folder** — double-click `TQNY-Setup.bat`.
@@ -32,29 +32,37 @@ TQNY-Setup.bat /apply /site:JED
 
 ```
  =====================================================================
-   TQNY IT SETUP TOOL  v2.0
+   TQNY IT SETUP TOOL  v3.0
+   tqnyprofile.com   CR 7049547834   Maroof #358680
  =====================================================================
-   Machine  : ZW0V              Model    : B650M AORUS ELITE AX
-   Network  : Ethernet  192.168.100.2     Internet : OK
-   Profile  : Public - NOT visible on the network
-   Prefix   : TQNY              Registry : 3 names assigned
- ---------------------------------------------------------------------
 
-   [1]  Full setup            rename + make visible, previews first
-   [2]  Rename this PC        assign the next free TQNY name
-   [3]  Check the internet    read only, changes nothing
-   [4]  Make this PC visible on the network
-   [5]  Name registry         list / prefix / release
-   [6]  Troubleshooting and info
+   [1]  Full setup                  rename + make visible
+   [2]  Rename this PC              next number, or type a name
+   [3]  Network                     internet / visibility / remote access
+   [4]  Standard PC setup           power, time, drives, printer
+   [5]  Health check                disk, updates, antivirus, BitLocker
+   [6]  System info + handover report
+   [7]  Name registry               list / prefix / release
+   [8]  Troubleshooting and info
 
    [0]  Exit
 ```
 
-The header shows the live state of the PC you are on, so you see the problem before fixing it. A `Public` profile is the usual reason a PC cannot be seen on the network.
+The banner deliberately shows **no machine, network or registry detail** — nothing identifying appears on screen. That information is available on demand under `[8] Troubleshooting`.
 
 **Nothing changes until you confirm.** Every option that would modify the PC previews exactly what it plans to do, then asks Y/N.
 
 Administrator rights are requested once at startup. Decline and it still opens in read-only mode — checking and reporting work, changes are disabled.
+
+### What each section does
+
+**[3] Network** — the read-only internet check; the visibility fix; enable Remote Desktop (warns first, and refuses to pretend a Public network is safe); and connection details showing the hostname, every IP, RDP state and who is logged on.
+
+**[4] Standard PC setup** — the repetitive jobs on a new office PC, each confirmed separately: never-sleep power plan, time zone + clock resync, computer description, map a network drive, add a network printer.
+
+**[5] Health check** — entirely read-only. Windows build and uptime, activation status, disk SMART health, free space with a low-space flag, antivirus, BitLocker, pending-reboot detection, battery, and a count of critical events in the last 7 days.
+
+**[6] System info + handover report** — full specification, then writes a customer handover sheet to `handover\` carrying your CR, Maroof number, site and contact details, what the PC was called before and after, its specs and the network as handed over. Proof of work to leave behind.
 
 ---
 
@@ -73,9 +81,22 @@ Machines are identified by a hardware fingerprint from the onboard NIC, so:
 
 Fallback order if there is no usable NIC: system UUID, then motherboard serial. If none can be read it stops rather than guess.
 
+### Numbered or free-form names
+
+`[2] Rename this PC` offers both:
+
+```
+   [1]  Take the next free number    prefix TQNY, e.g. TQNY-04
+   [2]  Type a name myself           e.g. RECEPTION-PC
+```
+
+A typed name goes through exactly the same safety as a numbered one — Windows naming rules (1–15 chars, letters/digits/hyphens, not all digits, no trailing hyphen), rejected if it is already in the registry, and rejected if it already answers on the network. It is then recorded so it is collision-checked forever after.
+
+Free-form rows are stored with `Number` = `0`, meaning they belong to no numbered sequence: they never consume a number, and the machine is still recognised by fingerprint whatever the current prefix is. Scripted equivalent: `/setname:RECEPTION-PC`.
+
 ### Prefixes
 
-Names are `PREFIX-NN`. Change the prefix in the menu (`[5]` → `[2]`), per run with `/prefix:ACME`, or permanently by editing `TQNY_PREFIX` at the top of the script.
+Names are `PREFIX-NN`. Change the prefix in the menu (`[7]` → `[2]`), per run with `/prefix:ACME`, or permanently by editing `TQNY_PREFIX` at the top of the script.
 
 **Each prefix numbers independently** — `ACME-01` and `TQNY-01` are different machines and can coexist, so you can keep a separate run of numbers per customer or site.
 
@@ -91,7 +112,7 @@ To enable renaming, point it at a registry file you control:
 
 ```powershell
 $env:TQNY_DB = '\\server\share\TQNY-Names.csv'
-irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
+irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
 ```
 
 ---
@@ -107,6 +128,7 @@ irm https://raw.githubusercontent.com/zw0v/tqny-setup/main/tqny.ps1 | iex
 | `/prefix:ACME` | Use a different prefix |
 | `/ask` | Ask for the prefix on screen |
 | `/name:07` | Force a specific number |
+| `/setname:NAME` | Use this exact computer name instead of numbering |
 | `/site:JED` | Tag the machine with a site code |
 | `/db:PATH` | Use a different registry file |
 | `/menu` | Force the menu even with other switches |
@@ -140,7 +162,9 @@ It never runs `flushdns`, never renews DHCP, and never resets the network stack.
 - **Protected machines.** `PROTECTED_NAMES` / `PROTECTED_MACS` at the top of the script list PCs that must never be renamed. On those the menu shows the rename option in red as blocked, the rename is refused even with `/apply`, and no number is consumed.
 - **Domain-joined PCs** are refused by default — renaming without domain credentials breaks the AD computer account. `/force-domain` overrides and prompts for credentials.
 - **Concurrent technicians.** Put the registry on a share and point both copies at it. An atomic lock is held during allocation, so two people cannot claim the same number.
-- The registry CSV and logs are `.gitignore`d — they hold customer machine data and are never published.
+- The registry CSV, the logs and the handover sheets are `.gitignore`d — they hold customer machine data and are never published.
+- **Hosting.** The repo is private. Distribution is a **secret gist**: not listed on the profile, not indexed by search, reachable only by its link. That is *hidden, not secure* — anyone given the link can read it and pass it on. There are no credentials or customer data in the script, so this is an acceptable trade, but it is not access control.
+- Run `push-tqny.bat` after editing, so the private repo and the gist cannot drift apart. The raw URL is cached for roughly 5 minutes.
 
 ## Note when editing
 
