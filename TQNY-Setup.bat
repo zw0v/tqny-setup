@@ -38,7 +38,7 @@ rem ---------------------------------------------------------------------------
 rem  Do not edit below this line
 rem ---------------------------------------------------------------------------
 
-set "TOOL_VERSION=3.0"
+set "TOOL_VERSION=3.2"
 
 rem --- company identity, shown in the banner and on the handover report ------
 set "CO_NAME=TQNY Company - Software Licenses ^& Hardware Solutions"
@@ -272,12 +272,14 @@ if "%NO_RENAME%"=="1" (
 ) else (
     call :menu_item 2 "Rename this PC" "assign the next free %PREFIX% name"
 )
-call :menu_item 3 "Network" "internet / visibility / remote access"
-call :menu_item 4 "Standard PC setup" "power, time, drives, printer"
-call :menu_item 5 "Health check" "disk, updates, antivirus, BitLocker"
-call :menu_item 6 "System info + handover report" ""
-call :menu_item 7 "Name registry" "list / prefix / release"
-call :menu_item 8 "Troubleshooting and info" ""
+call :menu_item 3 "Network" "internet / scan / visibility / share / remote"
+call :menu_item 4 "Printers & scanners" "find, add, driver, test print"
+call :menu_item 5 "Standard PC setup" "power, time, drives"
+call :menu_item 6 "Health check" "disk, updates, antivirus, BitLocker"
+call :menu_item 7 "Maintenance" "clean temp/bin, Defender, Windows Update"
+call :menu_item 8 "System info + handover report" ""
+call :menu_item 9 "Name registry" "list / prefix / release"
+call :menu_item 10 "Troubleshooting and info" ""
 echo.
 echo    %C_G%[0]%C_0%  Exit
 echo.
@@ -286,14 +288,16 @@ set "SEL="
 set /p "SEL=   Type a number and press Enter: "
 if not defined SEL goto menu_empty
 set "EMPTYIN=0"
-if "%SEL%"=="1" ( call :act_full      & goto main_menu )
-if "%SEL%"=="2" ( call :act_rename    & goto main_menu )
-if "%SEL%"=="3" ( call :menu_network  & goto main_menu )
-if "%SEL%"=="4" ( call :menu_pcsetup  & goto main_menu )
-if "%SEL%"=="5" ( call :act_health    & goto main_menu )
-if "%SEL%"=="6" ( call :act_handover  & goto main_menu )
-if "%SEL%"=="7" ( call :menu_registry & goto main_menu )
-if "%SEL%"=="8" ( call :menu_tools    & goto main_menu )
+if "%SEL%"=="1"  ( call :act_full      & goto main_menu )
+if "%SEL%"=="2"  ( call :act_rename    & goto main_menu )
+if "%SEL%"=="3"  ( call :menu_network  & goto main_menu )
+if "%SEL%"=="4"  ( call :menu_printers & goto main_menu )
+if "%SEL%"=="5"  ( call :menu_pcsetup  & goto main_menu )
+if "%SEL%"=="6"  ( call :act_health    & goto main_menu )
+if "%SEL%"=="7"  ( call :menu_maint    & goto main_menu )
+if "%SEL%"=="8"  ( call :act_handover  & goto main_menu )
+if "%SEL%"=="9"  ( call :menu_registry & goto main_menu )
+if "%SEL%"=="10" ( call :menu_tools    & goto main_menu )
 if "%SEL%"=="0" goto cleanup
 goto main_menu
 
@@ -434,9 +438,11 @@ rem ---------------------------------------------------------------------------
 call :draw_header
 echo.
 call :menu_item 1 "Check the internet" "read only, changes nothing"
-call :menu_item 2 "Make this PC visible on the network" ""
-call :menu_item 3 "Remote Desktop" "let you connect to this PC later"
-call :menu_item 4 "Show connection details" "hostname, IP, who is logged on"
+call :menu_item 2 "Scan the network" "see every PC, name and ping"
+call :menu_item 3 "Make this PC visible on the network" ""
+call :menu_item 4 "Create a shared folder" "folder + share + permissions"
+call :menu_item 5 "Remote Desktop" "let you connect to this PC later"
+call :menu_item 6 "Show connection details" "hostname, IP, who is logged on"
 echo.
 echo    %C_G%[0]%C_0%  Back
 echo.
@@ -444,10 +450,12 @@ echo  %C_D%--------------------------------------------------------------------%
 set "SEL="
 set /p "SEL=   Type a number and press Enter: "
 if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
-if "%SEL%"=="1" ( call :act_diag    & goto menu_network )
-if "%SEL%"=="2" ( call :act_share   & goto menu_network )
-if "%SEL%"=="3" ( call :act_rdp     & goto menu_network )
-if "%SEL%"=="4" ( call :act_conninfo& goto menu_network )
+if "%SEL%"=="1" ( call :act_diag      & goto menu_network )
+if "%SEL%"=="2" ( call :act_netscan   & goto menu_network )
+if "%SEL%"=="3" ( call :act_share     & goto menu_network )
+if "%SEL%"=="4" ( call :act_makeshare & goto menu_network )
+if "%SEL%"=="5" ( call :act_rdp       & goto menu_network )
+if "%SEL%"=="6" ( call :act_conninfo  & goto menu_network )
 if "%SEL%"=="0" exit /b 0
 goto menu_network
 
@@ -496,6 +504,452 @@ call :pause_return
 exit /b 0
 
 rem ---------------------------------------------------------------------------
+rem  Scan the network - read only. Lists every live PC, its name and ping.
+rem ---------------------------------------------------------------------------
+:act_netscan
+call :draw_header
+call :find_helper "scan-source.ps1"
+if errorlevel 1 ( call :pause_return & exit /b 0 )
+call :hdr "Scan the network - read only, nothing is changed"
+set "CBASE="
+set /p "CBASE=   Subnet base to scan, blank = this network (e.g. 192.168.1): "
+set "TQNY_SCAN_BASE=%CBASE%"
+set "TQNY_SCAN_PREFIX=%PREFIX%"
+call :say ""
+call :say "  Scanning, this takes a few seconds..."
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HELPER%" > "%PSOUT%" 2>nul
+set "TQNY_SCAN_BASE="
+call :say ""
+call :say "   IP               NAME              MAC                  ms"
+call :say "   ---------------- ----------------- -------------------- -----"
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do (
+    if "%%A"=="ROW"    call :scanrow "%%B"
+    if "%%A"=="INFO"   call :say "  %%B"
+    if "%%A"=="NOSCAN" call :say "  [FAIL] %%B"
+    if "%%A"=="DONE"   call :say "   %C_G%%%B host(s) answered.%C_0%"
+)
+call :say ""
+call :say "  Names come from NetBIOS or DNS and are best-effort; some devices"
+call :say "  do not report one. IP, MAC and ping are always reliable."
+call :pause_return
+exit /b 0
+
+:scanrow
+setlocal EnableDelayedExpansion
+for /f "tokens=1-5 delims=|" %%a in ("%~1") do set "LN=   %%a %%b %%c %%d  %%e"
+echo(!LN!
+if defined LOG >>"%LOG%" echo(!LN!
+endlocal
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Create a folder and share it on the network in one step.
+rem ---------------------------------------------------------------------------
+:act_makeshare
+call :draw_header
+call :hdr "Create a shared folder"
+call :say "  Makes a folder, shares it, and lets everyone on the network read"
+call :say "  and write it. Your existing shares are not touched."
+call :say ""
+set "SHF=C:\TQNY-Share"
+set /p "SHF=   Folder path [C:\TQNY-Share]: "
+if not defined SHF set "SHF=C:\TQNY-Share"
+set "SHNAME="
+for %%I in ("%SHF%") do set "SHDEF=%%~nxI"
+set /p "SHNAME=   Share name [%SHDEF%]: "
+if not defined SHNAME set "SHNAME=%SHDEF%"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+call :say ""
+call :say "  Folder : %SHF%"
+call :say "  Share  : %SHNAME%    access: Everyone, read and write"
+echo.
+call :confirm "   Create and share this folder?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was created." & call :pause_return & exit /b 0 )
+%PS% "$ErrorActionPreference='Stop'; try{ if(-not(Test-Path '%SHF%')){New-Item -ItemType Directory -Path '%SHF%' -Force | Out-Null}; if(Get-SmbShare -Name '%SHNAME%' -ErrorAction SilentlyContinue){throw 'A share named %SHNAME% already exists on this PC.'}; New-SmbShare -Name '%SHNAME%' -Path '%SHF%' -FullAccess 'Everyone' -ErrorAction Stop | Out-Null; icacls '%SHF%' /grant '*S-1-1-0:(OI)(CI)M' | Out-Null; 'MK=OK'}catch{'MK=FAIL='+$_.Exception.Message}" > "%PSOUT%" 2>&1
+findstr /b /c:"MK=OK" "%PSOUT%" >nul 2>&1
+if errorlevel 1 (
+    call :say "  [FAIL] Could not create the share:"
+    call :sayfile "%PSOUT%" "         "
+    call :pause_return
+    exit /b 0
+)
+call :say "  [OK] Shared. Reach it from another PC at:"
+call :say "       \\%COMPUTERNAME%\%SHNAME%"
+for /f "usebackq delims=" %%L in (`powershell -NoProfile -Command "(Get-NetIPAddress -AddressFamily IPv4 ^| Where-Object{$_.IPAddress -notlike '169.*' -and $_.IPAddress -ne '127.0.0.1' -and $_.PrefixOrigin -ne 'WellKnown'} ^| Select-Object -First 1).IPAddress"`) do call :say "       \\%%L\%SHNAME%"
+call :say ""
+call :say "  Turning on network discovery so the share is reachable..."
+set "MODE=apply"
+call :step_share
+set "MODE=preview"
+call :pause_return
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Sub-menu: Maintenance (cleanup + Defender + Windows Update)
+rem ---------------------------------------------------------------------------
+:menu_maint
+call :draw_header
+echo.
+call :menu_item 1 "Clean temp files" "user temp + Windows temp"
+call :menu_item 2 "Empty the Recycle Bin" "PERMANENT"
+call :menu_item 3 "Clear Windows Update cache" ""
+call :menu_item 4 "Clear extras" "Prefetch, thumbnails, delivery cache"
+call :menu_item 5 "Clean everything above" ""
+call :menu_item 6 "Windows Defender real-time" "on / off"
+call :menu_item 7 "Windows Update" "on / off / pause"
+echo.
+echo    %C_G%[0]%C_0%  Back
+echo.
+echo  %C_D%--------------------------------------------------------------------%C_0%
+set "SEL="
+set /p "SEL=   Type a number and press Enter: "
+if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
+if "%SEL%"=="1" ( call :act_clean_temp  & goto menu_maint )
+if "%SEL%"=="2" ( call :act_clean_bin   & goto menu_maint )
+if "%SEL%"=="3" ( call :act_clean_wu    & goto menu_maint )
+if "%SEL%"=="4" ( call :act_clean_extra & goto menu_maint )
+if "%SEL%"=="5" ( call :act_clean_all   & goto menu_maint )
+if "%SEL%"=="6" ( call :act_defender    & goto menu_maint )
+if "%SEL%"=="7" ( call :act_update      & goto menu_maint )
+if "%SEL%"=="0" exit /b 0
+goto menu_maint
+
+:act_clean_temp
+call :draw_header
+call :hdr "Clean temp files"
+%PS% "$ErrorActionPreference='SilentlyContinue'; $t=0; foreach($p in $env:TEMP,(Join-Path $env:WINDIR 'Temp')){$t+=(Get-ChildItem $p -Recurse -Force | Measure-Object Length -Sum).Sum}; '  Reclaimable now: {0:N0} MB' -f [math]::Round($t/1MB)" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" ""
+call :say "  Clears the user temp folder and C:\Windows\Temp. In-use files skip."
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Delete temp files now?"
+if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+%PS% "$ErrorActionPreference='SilentlyContinue'; foreach($p in $env:TEMP,(Join-Path $env:WINDIR 'Temp')){Get-ChildItem $p -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue}" >nul 2>&1
+call :say "  [OK] Temp files cleared."
+call :pause_return
+exit /b 0
+
+:act_clean_bin
+call :draw_header
+call :hdr "Empty the Recycle Bin"
+%PS% "$ErrorActionPreference='SilentlyContinue'; $rb=(New-Object -ComObject Shell.Application).NameSpace(0xA); $n=@($rb.Items()).Count; $b=0; foreach($i in $rb.Items()){$b+=$i.Size}; '  The Recycle Bin holds {0} item(s), about {1:N0} MB.' -f $n,[math]::Round($b/1MB)" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" ""
+call :say ""
+call :say "  %C_R%This permanently deletes everything in the Recycle Bin and%C_0%"
+call :say "  %C_R%CANNOT be undone.%C_0%"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Permanently empty the Recycle Bin?"
+if errorlevel 1 ( call :say "  Cancelled. The Recycle Bin was not touched." & call :pause_return & exit /b 0 )
+%PS% "Clear-RecycleBin -Force -ErrorAction SilentlyContinue" >nul 2>&1
+call :say "  [OK] Recycle Bin emptied."
+call :pause_return
+exit /b 0
+
+:act_clean_wu
+call :draw_header
+call :hdr "Clear the Windows Update cache"
+call :say "  Clears old downloaded update files. Windows re-downloads anything"
+call :say "  it still needs. Good when Update misbehaves or eats disk."
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Clear the Windows Update cache?"
+if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+net stop wuauserv >nul 2>&1
+net stop bits >nul 2>&1
+%PS% "$ErrorActionPreference='SilentlyContinue'; $d=Join-Path $env:WINDIR 'SoftwareDistribution\Download'; if(Test-Path $d){Get-ChildItem $d -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue}" >nul 2>&1
+net start bits >nul 2>&1
+net start wuauserv >nul 2>&1
+call :say "  [OK] Windows Update cache cleared."
+call :pause_return
+exit /b 0
+
+:act_clean_extra
+call :draw_header
+call :hdr "Clear extras - Prefetch, thumbnails, delivery cache"
+call :say "  Frees a little more. Next boot and first folder views rebuild these,"
+call :say "  so they are marginally slower once."
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Clear Prefetch, thumbnails and delivery cache?"
+if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+%PS% "$ErrorActionPreference='SilentlyContinue'; Get-ChildItem (Join-Path $env:WINDIR 'Prefetch') -Force | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue; Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer') -Filter 'thumbcache_*' -Force | Remove-Item -Force -ErrorAction SilentlyContinue; try{Delete-DeliveryOptimizationData -ErrorAction SilentlyContinue}catch{}" >nul 2>&1
+call :say "  [OK] Extras cleared."
+call :pause_return
+exit /b 0
+
+:act_clean_all
+call :draw_header
+call :hdr "Clean everything"
+call :say "  Runs all of: temp files, Recycle Bin, Windows Update cache, and"
+call :say "  extras (Prefetch, thumbnails, delivery cache)."
+call :say "  %C_R%The Recycle Bin part is permanent and cannot be undone.%C_0%"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Clean all of the above now?"
+if errorlevel 1 ( call :say "  Cancelled. Nothing was cleaned." & call :pause_return & exit /b 0 )
+net stop wuauserv >nul 2>&1
+net stop bits >nul 2>&1
+%PS% "$ErrorActionPreference='SilentlyContinue'; foreach($p in $env:TEMP,(Join-Path $env:WINDIR 'Temp'),(Join-Path $env:WINDIR 'SoftwareDistribution\Download'),(Join-Path $env:WINDIR 'Prefetch')){ if(Test-Path $p){Get-ChildItem $p -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue} }; Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer') -Filter 'thumbcache_*' -Force | Remove-Item -Force -ErrorAction SilentlyContinue; Clear-RecycleBin -Force -ErrorAction SilentlyContinue; try{Delete-DeliveryOptimizationData -ErrorAction SilentlyContinue}catch{}" >nul 2>&1
+net start bits >nul 2>&1
+net start wuauserv >nul 2>&1
+call :say "  [OK] Cleaned temp, Recycle Bin, Windows Update cache and extras."
+call :pause_return
+exit /b 0
+
+:act_defender
+call :draw_header
+call :hdr "Windows Defender real-time protection"
+%PS% "$ErrorActionPreference='SilentlyContinue'; $m=Get-MpComputerStatus; 'DEF_RT='+$m.RealTimeProtectionEnabled; 'DEF_TP='+$m.IsTamperProtected" > "%PSOUT%" 2>nul
+set "DEF_RT=unknown"
+set "DEF_TP=unknown"
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do set "%%A=%%B"
+call :say "  Real-time protection : %DEF_RT%"
+call :say "  Tamper Protection    : %DEF_TP%"
+call :say ""
+if /i "%DEF_TP%"=="True" (
+    call :say "  %C_Y%Tamper Protection is ON. Windows will block or revert any attempt%C_0%"
+    call :say "  %C_Y%to turn real-time protection off from a script. Turn Tamper%C_0%"
+    call :say "  %C_Y%Protection off first in Windows Security, then try again.%C_0%"
+    call :say ""
+)
+call :say "   [1] Turn real-time protection ON"
+call :say "   [2] Turn real-time protection OFF"
+call :say "   [3] Open Windows Security settings"
+call :say "   [0] Back"
+echo.
+set "DCH="
+set /p "DCH=   Choose: "
+if "%DCH%"=="3" ( start "" "windowsdefender:" & exit /b 0 )
+if "%DCH%"=="0" exit /b 0
+if not "%DCH%"=="1" if not "%DCH%"=="2" exit /b 0
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+if "%DCH%"=="1" set "DVAL=$false"
+if "%DCH%"=="2" set "DVAL=$true"
+if "%DCH%"=="2" (
+    call :confirm "   Really turn real-time protection OFF?"
+    if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+)
+%PS% "$ErrorActionPreference='SilentlyContinue'; Set-MpPreference -DisableRealtimeMonitoring %DVAL%; Start-Sleep -Seconds 1; 'NOW='+(Get-MpComputerStatus).RealTimeProtectionEnabled" > "%PSOUT%" 2>nul
+set "NOW="
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do if "%%A"=="NOW" set "NOW=%%B"
+call :say ""
+call :say "  Real-time protection is now: %NOW%"
+if "%DCH%"=="2" if /i "%NOW%"=="True" call :say "  %C_Y%As warned, Tamper Protection reverted it. Turn that off first.%C_0%"
+call :pause_return
+exit /b 0
+
+:act_update
+call :draw_header
+call :hdr "Windows Update"
+%PS% "$ErrorActionPreference='SilentlyContinue'; $s=Get-Service wuauserv; 'WU_ST='+$s.Status; 'WU_ST2='+$s.StartType" > "%PSOUT%" 2>nul
+set "WU_ST=unknown"
+set "WU_ST2=unknown"
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do set "%%A=%%B"
+call :say "  Update service status : %WU_ST%"
+call :say "  Start type            : %WU_ST2%"
+call :say ""
+call :say "  Note: Windows often re-enables Update on its own. Pause is stickier."
+call :say ""
+call :say "   [1] Turn Windows Update ON  (automatic)"
+call :say "   [2] Turn Windows Update OFF (stop + disable)"
+call :say "   [3] Pause updates for 7 days"
+call :say "   [0] Back"
+echo.
+set "UCH="
+set /p "UCH=   Choose: "
+if "%UCH%"=="0" exit /b 0
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+if "%UCH%"=="1" (
+    sc config wuauserv start= auto >nul 2>&1
+    net start wuauserv >nul 2>&1
+    call :say "  [OK] Windows Update set to automatic and started."
+    call :pause_return
+    exit /b 0
+)
+if "%UCH%"=="2" (
+    call :confirm "   Really turn Windows Update OFF?"
+    if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+    net stop wuauserv >nul 2>&1
+    sc config wuauserv start= disabled >nul 2>&1
+    call :say "  [OK] Windows Update stopped and disabled. Windows may re-enable it."
+    call :pause_return
+    exit /b 0
+)
+if "%UCH%"=="3" (
+    %PS% "$ErrorActionPreference='SilentlyContinue'; $k='HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UX\Settings'; if(-not(Test-Path $k)){New-Item $k -Force | Out-Null}; $s=(Get-Date).ToUniversalTime(); $e=$s.AddDays(7); Set-ItemProperty $k 'PauseUpdatesStartTime' $s.ToString('yyyy-MM-ddTHH:mm:ssZ'); Set-ItemProperty $k 'PauseUpdatesExpiryTime' $e.ToString('yyyy-MM-ddTHH:mm:ssZ')" >nul 2>&1
+    call :say "  [OK] Updates paused for 7 days."
+    call :pause_return
+    exit /b 0
+)
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem  Sub-menu: Printers & scanners
+rem ---------------------------------------------------------------------------
+:menu_printers
+call :draw_header
+echo.
+call :menu_item 1 "Find printers & scanners on the network" "read only"
+call :menu_item 2 "Add a printer" "driverless where possible"
+call :menu_item 3 "Install / find a driver" "official pages + Windows Update"
+call :menu_item 4 "Test print" "send a Windows test page"
+call :menu_item 5 "Add a scanner" "eSCL / WSD"
+call :menu_item 6 "List printers already installed" ""
+echo.
+echo    %C_G%[0]%C_0%  Back
+echo.
+echo  %C_D%--------------------------------------------------------------------%C_0%
+set "SEL="
+set /p "SEL=   Type a number and press Enter: "
+if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
+if "%SEL%"=="1" ( call :act_printfind    & goto menu_printers )
+if "%SEL%"=="2" ( call :act_printadd     & goto menu_printers )
+if "%SEL%"=="3" ( call :act_printdriver  & goto menu_printers )
+if "%SEL%"=="4" ( call :act_testprint    & goto menu_printers )
+if "%SEL%"=="5" ( call :act_addscanner   & goto menu_printers )
+if "%SEL%"=="6" ( call :act_listprinters & goto menu_printers )
+if "%SEL%"=="0" exit /b 0
+goto menu_printers
+
+:act_printfind
+call :draw_header
+call :find_helper "printer-scan-source.ps1"
+if errorlevel 1 ( call :pause_return & exit /b 0 )
+call :hdr "Find printers and scanners - read only"
+set "CBASE="
+set /p "CBASE=   Subnet base, blank = this network: "
+set "TQNY_SCAN_BASE=%CBASE%"
+call :say ""
+call :say "  Looking, this takes a few seconds..."
+powershell -NoProfile -ExecutionPolicy Bypass -File "%HELPER%" > "%PSOUT%" 2>nul
+set "TQNY_SCAN_BASE="
+call :say ""
+call :say "   IP               MODEL                                  PROTOCOLS"
+call :say "   ---------------- -------------------------------------- ---------"
+for /f "usebackq tokens=1,* delims==" %%A in ("%PSOUT%") do (
+    if "%%A"=="DEV"    call :devrow "%%B"
+    if "%%A"=="INFO"   call :say "  %%B"
+    if "%%A"=="NOSCAN" call :say "  [FAIL] %%B"
+    if "%%A"=="DONE"   call :say "   %C_G%%%B printer/scanner device(s) found.%C_0%"
+)
+call :say ""
+call :say "  RAW=port 9100  LPD=515  IPP=631  eSCL=scan.  Use [2] to add one."
+call :pause_return
+exit /b 0
+
+:devrow
+setlocal EnableDelayedExpansion
+for /f "tokens=1-3 delims=|" %%a in ("%~1") do set "LN=   %%a %%b %%c"
+echo(!LN!
+if defined LOG >>"%LOG%" echo(!LN!
+endlocal
+exit /b 0
+
+:act_printadd
+call :draw_header
+call :hdr "Add a network printer"
+call :say "  Adds the printer over IPP using the built-in Microsoft IPP Class"
+call :say "  Driver - no driver download needed on modern printers and MFPs."
+call :say ""
+set "PIP="
+set /p "PIP=   Printer IP address: "
+if not defined PIP ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+set "PNAME="
+set /p "PNAME=   Name to show [%PIP%]: "
+if not defined PNAME set "PNAME=%PIP%"
+if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+echo.
+call :confirm "   Add printer %PNAME% at %PIP% over IPP?"
+if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+%PS% "$ErrorActionPreference='Stop'; try{ $port='IPP_%PIP%'; $uri='http://%PIP%:631/ipp/print'; if(-not(Get-PrinterPort -Name $port -ErrorAction SilentlyContinue)){Add-PrinterPort -Name $port -PrinterHostAddress '%PIP%' -ErrorAction SilentlyContinue}; Add-Printer -Name '%PNAME%' -DriverName 'Microsoft IPP Class Driver' -PortName $port -ErrorAction Stop; 'AP=OK'}catch{'AP=FAIL='+$_.Exception.Message}" > "%PSOUT%" 2>&1
+findstr /b /c:"AP=OK" "%PSOUT%" >nul 2>&1
+if not errorlevel 1 (
+    call :say "  [OK] Printer %PNAME% added. Use [4] Test print to check it."
+) else (
+    call :say "  [WARN] Driverless add failed. The printer may not speak IPP."
+    call :sayfile "%PSOUT%" "         "
+    call :say "  Try [3] Install / find a driver, then add via its TCP port 9100."
+)
+call :pause_return
+exit /b 0
+
+:act_printdriver
+call :draw_header
+call :hdr "Install / find a printer driver"
+call :say "  Modern printers print with no driver via [2] Add a printer. If a"
+call :say "  model needs the vendor driver, open its official page below."
+call :say ""
+call :say "   [1] Samsung MultiXpress X42xx / X43xx  (HP/Samsung UPD)"
+call :say "   [2] Kyocera ECOSYS MA5500x            (Kyocera KX driver)"
+call :say "   [3] Develop ineo+ 266                 (KM/Develop UPD)"
+call :say "   [4] Try Windows Update for a driver now"
+call :say "   [0] Back"
+echo.
+set "MCH="
+set /p "MCH=   Choose: "
+if "%MCH%"=="1" ( start "" "https://support.hp.com/us-en/drivers/printers" & call :say "  Opened the HP/Samsung driver page." )
+if "%MCH%"=="2" ( start "" "https://www.kyoceradocumentsolutions.com/en/support/downloads.html" & call :say "  Opened the Kyocera downloads page." )
+if "%MCH%"=="3" ( start "" "https://www.develop.eu/en/support/download-center/" & call :say "  Opened the Develop download centre." )
+if "%MCH%"=="4" (
+    if "%ADMIN%"=="0" ( call :need_admin_msg & exit /b 0 )
+    call :say "  Asking Windows Update for printer drivers, please wait..."
+    %PS% "$ErrorActionPreference='SilentlyContinue'; pnputil /scan-devices | Out-Null; 'done'" >nul 2>&1
+    call :say "  [OK] Asked Windows to look. Then use [2] to add the printer."
+)
+call :pause_return
+exit /b 0
+
+:act_testprint
+call :draw_header
+call :hdr "Test print"
+call :say "  Installed printers:"
+%PS% "$ErrorActionPreference='SilentlyContinue'; Get-Printer | ForEach-Object{'   - '+$_.Name}" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" ""
+call :say ""
+set "TPN="
+set /p "TPN=   Printer name to test, blank = cancel: "
+if not defined TPN ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+echo.
+call :confirm "   Send a test page to %TPN%?"
+if errorlevel 1 ( call :say "  Cancelled." & call :pause_return & exit /b 0 )
+%PS% "$ErrorActionPreference='SilentlyContinue'; $p=Get-CimInstance Win32_Printer -Filter (\"Name='\"+'%TPN%'+\"'\"); if($p){Invoke-CimMethod -InputObject $p -MethodName PrintTestPage | Out-Null; 'TP=OK'}else{'TP=FAIL'}" > "%PSOUT%" 2>nul
+findstr /b /c:"TP=OK" "%PSOUT%" >nul 2>&1
+if not errorlevel 1 ( call :say "  [OK] Test page sent to %TPN%." ) else ( call :say "  [FAIL] No printer named %TPN%." )
+call :pause_return
+exit /b 0
+
+:act_addscanner
+call :draw_header
+call :hdr "Add a scanner"
+call :say "  Modern MFPs scan over eSCL (AirScan) or WSD. Windows can use these"
+call :say "  without a vendor driver, but some scan features still need the"
+call :say "  vendor's app. Find scanners first with [1]."
+call :say ""
+call :say "  Opening Windows 'Printers & scanners' so you can add the device"
+call :say "  it discovers over WSD/eSCL..."
+start "" "ms-settings:printers"
+call :say "  [OK] Opened Windows settings. Click 'Add device'."
+call :pause_return
+exit /b 0
+
+:act_listprinters
+call :draw_header
+call :hdr "Installed printers"
+%PS% "$ErrorActionPreference='SilentlyContinue'; Get-Printer | Format-Table -AutoSize Name,DriverName,PortName,Shared | Out-String -Width 200" > "%PSOUT%" 2>nul
+call :sayfile "%PSOUT%" ""
+call :pause_return
+exit /b 0
+
+rem --- resolve a helper .ps1 that ships next to this script -------------------
+:find_helper
+set "HELPER=%SCRIPT_DIR%\%~1"
+if exist "%HELPER%" exit /b 0
+call :say "  [FAIL] Helper %~1 was not found next to the tool."
+call :say "         It must sit in the same folder as TQNY-Setup.bat."
+exit /b 1
+
+rem ---------------------------------------------------------------------------
 rem  Sub-menu: standard PC setup
 rem ---------------------------------------------------------------------------
 :menu_pcsetup
@@ -505,7 +959,7 @@ call :menu_item 1 "Never sleep" "power plan for an office PC"
 call :menu_item 2 "Time zone and clock sync" "%TZ_WANT%"
 call :menu_item 3 "Set the computer description" "shown to others on the network"
 call :menu_item 4 "Map a network drive" ""
-call :menu_item 5 "Add a network printer" ""
+call :menu_item 5 "Printers & scanners" "opens the printers section"
 echo.
 echo    %C_G%[0]%C_0%  Back
 echo.
@@ -513,11 +967,11 @@ echo  %C_D%--------------------------------------------------------------------%
 set "SEL="
 set /p "SEL=   Type a number and press Enter: "
 if not defined SEL ( set /a "EMPTYIN+=1" & if !EMPTYIN! GEQ 3 exit /b 0 )
-if "%SEL%"=="1" ( call :act_power   & goto menu_pcsetup )
-if "%SEL%"=="2" ( call :act_time    & goto menu_pcsetup )
-if "%SEL%"=="3" ( call :act_desc    & goto menu_pcsetup )
-if "%SEL%"=="4" ( call :act_mapdrv  & goto menu_pcsetup )
-if "%SEL%"=="5" ( call :act_printer & goto menu_pcsetup )
+if "%SEL%"=="1" ( call :act_power    & goto menu_pcsetup )
+if "%SEL%"=="2" ( call :act_time     & goto menu_pcsetup )
+if "%SEL%"=="3" ( call :act_desc     & goto menu_pcsetup )
+if "%SEL%"=="4" ( call :act_mapdrv   & goto menu_pcsetup )
+if "%SEL%"=="5" ( call :menu_printers & goto menu_pcsetup )
 if "%SEL%"=="0" exit /b 0
 goto menu_pcsetup
 
@@ -610,29 +1064,6 @@ if errorlevel 1 (
     call :sayfile "%PSOUT%" "         "
 ) else (
     call :say "  [OK] %MD_L%: now points at %MD_P%"
-)
-call :pause_return
-exit /b 0
-
-:act_printer
-call :draw_header
-call :hdr "Add a network printer"
-call :say "  Existing printers:"
-%PS% "$ErrorActionPreference='SilentlyContinue'; Get-Printer | Select-Object -ExpandProperty Name" > "%PSOUT%" 2>nul
-call :sayfile "%PSOUT%" "    "
-echo.
-set "PR_P="
-set /p "PR_P=   Printer path, e.g. \\server\printer : "
-if not defined PR_P exit /b 0
-echo.
-call :confirm "   Add %PR_P%?"
-if errorlevel 1 ( call :say "  Cancelled. Nothing was changed." & call :pause_return & exit /b 0 )
-rundll32 printui.dll,PrintUIEntry /in /n "%PR_P%" /q
-if errorlevel 1 (
-    call :say "  [FAIL] Could not add the printer. Check the path and that the"
-    call :say "         print server is reachable."
-) else (
-    call :say "  [OK] Printer added."
 )
 call :pause_return
 exit /b 0

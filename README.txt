@@ -30,26 +30,36 @@
 ---------------------------------------------------------------------------
 
   =====================================================================
-    TQNY IT SETUP TOOL  v2.0
+    TQNY IT SETUP TOOL  v3.2
+    tqnyprofile.com   CR 7049547834   Maroof #358680
   =====================================================================
-    Machine  : ZW0V              Model    : B650M AORUS ELITE AX
-    Network  : Ethernet  192.168.100.2     Internet : OK
-    Profile  : Public - NOT visible on the network
-    Prefix   : TQNY              Registry : 3 names assigned
-  ---------------------------------------------------------------------
 
-    [1]  Full setup            rename + make visible, previews first
-    [2]  Rename this PC        assign the next free TQNY name
-    [3]  Check the internet    read only, changes nothing
-    [4]  Make this PC visible on the network
-    [5]  Name registry         list / prefix / release
-    [6]  Troubleshooting and info
+    [1]  Full setup              rename + make visible
+    [2]  Rename this PC           next number, or type a name
+    [3]  Network                  internet / scan / visibility / share / remote
+    [4]  Printers & scanners      find, add, driver, test print
+    [5]  Standard PC setup        power, time, drives
+    [6]  Health check             disk, updates, antivirus, BitLocker
+    [7]  Maintenance              clean temp/bin, Defender, Windows Update
+    [8]  System info + handover report
+    [9]  Name registry            list / prefix / release
+    [10] Troubleshooting and info
 
     [0]  Exit
 
- The top of the screen always shows the live state of the PC you are on,
- so you can see the problem before you fix it. A Public profile is the
- usual reason a PC cannot be seen on the network.
+ The banner shows NO machine or network detail on purpose - nothing
+ identifying appears on screen. That info is under [10] Troubleshooting.
+
+ NEW in v3.1 / v3.2:
+   [3] Network      - Scan the network lists every PC with its name, MAC and
+                      ping, marks the PC you are on, and flags names already
+                      using your prefix. Create a shared folder makes a folder
+                      and shares it (Everyone read/write) in one step.
+   [4] Printers     - find printers/scanners on the LAN, add a printer with no
+                      driver over IPP, open official driver pages, test print.
+   [7] Maintenance  - clean temp files, empty the Recycle Bin, clear the
+                      Windows Update cache and extras; toggle Defender and
+                      Windows Update (honest about Tamper Protection).
 
  NOTHING IS CHANGED UNTIL YOU CONFIRM. Every option that would change the
  PC shows you exactly what it plans to do, then asks Y/N. Answer anything

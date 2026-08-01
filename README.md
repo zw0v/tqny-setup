@@ -32,31 +32,39 @@ TQNY-Setup.bat /apply /site:JED
 
 ```
  =====================================================================
-   TQNY IT SETUP TOOL  v3.0
+   TQNY IT SETUP TOOL  v3.2
    tqnyprofile.com   CR 7049547834   Maroof #358680
  =====================================================================
 
-   [1]  Full setup                  rename + make visible
-   [2]  Rename this PC              next number, or type a name
-   [3]  Network                     internet / visibility / remote access
-   [4]  Standard PC setup           power, time, drives, printer
-   [5]  Health check                disk, updates, antivirus, BitLocker
-   [6]  System info + handover report
-   [7]  Name registry               list / prefix / release
-   [8]  Troubleshooting and info
+   [1]  Full setup              rename + make visible
+   [2]  Rename this PC           next number, or type a name
+   [3]  Network                  internet / scan / visibility / share / remote
+   [4]  Printers & scanners      find, add, driver, test print
+   [5]  Standard PC setup        power, time, drives
+   [6]  Health check             disk, updates, antivirus, BitLocker
+   [7]  Maintenance              clean temp/bin, Defender, Windows Update
+   [8]  System info + handover report
+   [9]  Name registry            list / prefix / release
+   [10] Troubleshooting and info
 
    [0]  Exit
 ```
 
-The banner deliberately shows **no machine, network or registry detail** — nothing identifying appears on screen. That information is available on demand under `[8] Troubleshooting`.
+The banner deliberately shows **no machine, network or registry detail** — nothing identifying appears on screen. That information is available on demand under `[10] Troubleshooting`.
 
-**Nothing changes until you confirm.** Every option that would modify the PC previews exactly what it plans to do, then asks Y/N.
+**Nothing changes until you confirm.** Every option that would modify the PC previews exactly what it plans to do, then asks Y/N. Read-only actions (scans, checks, lists) just run.
 
-Administrator rights are requested once at startup. Decline and it still opens in read-only mode — checking and reporting work, changes are disabled.
+Administrator rights are requested once at startup. Decline and it still opens in read-only mode — checking, scanning and reporting work, changes are disabled.
 
 ### What each section does
 
-**[3] Network** — the read-only internet check; the visibility fix; enable Remote Desktop (warns first, and refuses to pretend a Public network is safe); and connection details showing the hostname, every IP, RDP state and who is logged on.
+**[3] Network** — the read-only internet check; **scan the network** (lists every live PC with its name, MAC and ping, marks the PC you're on `<< THIS PC`, and flags names already using your prefix — so you see what's taken before renaming); the visibility fix; **create a shared folder** (folder + SMB share + Everyone read/write + discovery, then prints the `\\PC\Share` path); enable Remote Desktop (warns first); and connection details.
+
+**[4] Printers & scanners** — **find** printers/scanners on the LAN (probes ports 9100/515/631 and SNMP for the model, plus eSCL for scanners); **add a printer** driverless over IPP using the built-in Microsoft IPP Class Driver — no download needed on modern MFPs; **install / find a driver** (opens the official page for Samsung MultiXpress, Kyocera ECOSYS, Develop ineo+, or asks Windows Update); **test print**; **add a scanner** over eSCL/WSD; and list installed printers. Auto-driver-download from vendor sites isn't reliably possible, so the honest path is driverless-first → Windows Update → open the exact official page.
+
+**[7] Maintenance** — clean temp files (user + Windows temp), empty the Recycle Bin (permanent, confirmed), clear the Windows Update cache, clear extras (Prefetch/thumbnails/delivery), or clean everything; plus **Windows Defender** and **Windows Update** on/off toggles. Defender detects Tamper Protection and reports whether the change actually stuck; Update offers a 7-day pause and notes Windows may re-enable it.
+
+**[3] Network → Remote Desktop** warns first and refuses to pretend a Public network is safe; connection details show hostname, every IP, RDP state and who is logged on.
 
 **[4] Standard PC setup** — the repetitive jobs on a new office PC, each confirmed separately: never-sleep power plan, time zone + clock resync, computer description, map a network drive, add a network printer.
 
@@ -166,6 +174,12 @@ It never runs `flushdns`, never renews DHCP, and never resets the network stack.
 - **Hosting.** The repo is private. Distribution is a **secret gist**: not listed on the profile, not indexed by search, reachable only by its link. That is *hidden, not secure* — anyone given the link can read it and pass it on. There are no credentials or customer data in the script, so this is an acceptable trade, but it is not access control.
 - Run `push-tqny.bat` after editing, so the private repo and the gist cannot drift apart. The raw URL is cached for roughly 5 minutes.
 
+## Files
+
+The network and printer scans live in two helper scripts that must sit **next to** `TQNY-Setup.bat`: `scan-source.ps1` and `printer-scan-source.ps1`. Locally they're in the folder; the one-liner downloads them alongside the `.bat`; the gist carries all of them. If a helper is missing, only that scan reports it — the rest of the tool runs. Run `push-tqny.bat` after any edit to update both the private repo and the gist so they never drift.
+
 ## Note when editing
 
 Keep the `.bat` saved with **CRLF** line endings. `cmd.exe` seeks labels by byte offset, so a `.bat` with Unix line endings jumps to the wrong lines and misbehaves in ways that look like logic bugs. `.gitattributes` enforces this, and the launcher re-normalises after download.
+
+Inside `%PS% "..."` blocks use a plain `|` — the surrounding double quotes already protect it from cmd. A `^|` there passes a stray caret to PowerShell and breaks the pipe. `^|` is only needed inside `for /f (...)` command contexts.

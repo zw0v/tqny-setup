@@ -20,8 +20,12 @@ $ErrorActionPreference = 'Stop'
 
 # Secret gist: not listed on the profile, not indexed, reachable only by link,
 # and its raw URL needs no login so this one-liner works anywhere.
-$GistId = '6a91d906258ca360a88265b6dcd28ba6'
-$BatUrl = "https://gist.githubusercontent.com/zw0v/$GistId/raw/TQNY-Setup.bat"
+$GistId  = '6a91d906258ca360a88265b6dcd28ba6'
+$RawBase = "https://gist.githubusercontent.com/zw0v/$GistId/raw"
+$BatUrl  = "$RawBase/TQNY-Setup.bat"
+# Helper scripts the .bat runs for the network and printer scans. They must land
+# next to the .bat so its :find_helper can locate them.
+$Helpers = 'scan-source.ps1', 'printer-scan-source.ps1'
 
 Write-Host ''
 Write-Host '  TQNY IT Setup - remote launcher' -ForegroundColor Cyan
@@ -47,6 +51,12 @@ try {
 $text = [System.IO.File]::ReadAllText($bat)
 $text = $text -replace "`r`n", "`n" -replace "`n", "`r`n"
 [System.IO.File]::WriteAllText($bat, $text, (New-Object System.Text.UTF8Encoding $false))
+
+# Pull the scan helpers next to the .bat. A failure here is not fatal - the
+# tool still runs, only the network/printer scan reports the helper is missing.
+foreach ($h in $Helpers) {
+    try { Invoke-WebRequest -Uri "$RawBase/$h" -OutFile (Join-Path $dir $h) -UseBasicParsing } catch {}
+}
 
 $argList = @('/remote')
 if ($env:TQNY_DB) {
