@@ -1,12 +1,8 @@
-# TQNY-Setup
+# TQNY-Setup v4.0
 
-A single-file Windows provisioning tool for IT technicians. Run it on a PC and it:
+A Windows app for IT technicians. One window for everything you do on a PC before and after a format: rename, network, Wi-Fi, sharing, printers, apps, Windows Update, drivers, firewall, activation, backup / restore, repair and cleanup.
 
-1. **Renames** the machine to `TQNY-01`, `TQNY-02`, … and guarantees no two machines ever get the same name.
-2. **Checks the internet** — strictly read-only. It reports what is broken and changes nothing.
-3. **Makes the PC visible on the network** so its shares can be reached.
-
-Menu-driven, no install, no dependencies beyond what ships with Windows.
+No install and no dependencies beyond what ships with Windows 10 / 11. It is a single PowerShell file (`TQNY-Setup.ps1`) with a real window (WPF), a sidebar, tick-boxes and a live log.
 
 ---
 
@@ -20,166 +16,127 @@ irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw
 
 **From a USB stick or local folder** — double-click `TQNY-Setup.bat`.
 
-**Scripted** — any switch skips the menu:
+Administrator is asked for **once**, at start. Say No and the app still opens in read-only mode: every check, scan and report works, changes are disabled.
+
+**Scripted / the old menu** — every v3.2 switch still works and goes to the classic console tool:
 
 ```bat
 TQNY-Setup.bat /apply /site:JED
+TQNY-Setup.bat /classic
 ```
 
 ---
 
-## The menu
+## The window
 
 ```
- =====================================================================
-   TQNY IT SETUP TOOL  v3.2
-   tqnyprofile.com   CR 7049547834   Maroof #358680
- =====================================================================
-
-   [1]  Full setup              rename + make visible
-   [2]  Rename this PC           next number, or type a name
-   [3]  Network                  internet / scan / visibility / share / remote
-   [4]  Printers & scanners      find, add, driver, test print
-   [5]  Standard PC setup        power, time, drives
-   [6]  Health check             disk, updates, antivirus, BitLocker
-   [7]  Maintenance              clean temp/bin, Defender, Windows Update
-   [8]  System info + handover report
-   [9]  Name registry            list / prefix / release
-   [10] Troubleshooting and info
-
-   [0]  Exit
+ +--------------+--------------------------------------------------------+
+ | TQNY         |  Page title                        [PC-NAME] [Restart] |
+ | IT Setup 4.0 |  what this page does                                   |
+ |              |--------------------------------------------------------|
+ | SETUP        |  +-- card -------------------------------------------+ |
+ |  Dashboard   |  | Title                                             | |
+ |  Quick setup |  | [ input ] [ input ]  [x] option  [x] option       | |
+ |  Apps        |  | [ Action tile ] [ Action tile ] [ Action tile ]   | |
+ |  Win Update  |  +---------------------------------------------------+ |
+ |  PC setup    |                                                        |
+ | NETWORK      |========================================================|
+ |  Network     |  * Running: Windows Update - 3/12  [====    ]  [Stop]  |
+ |  Wi-Fi       |  === Install Windows updates ===                       |
+ |  Sharing     |    [OK]    Installed update: 2026-10 Cumulative ...    |
+ |  Printers    |    [FAIL]  ...                                         |
+ | SYSTEM ...   |                                                        |
+ +--------------+--------------------------------------------------------+
 ```
 
-The banner deliberately shows **no machine, network or registry detail** — nothing identifying appears on screen. That information is available on demand under `[10] Troubleshooting`.
+* **Every job runs in the background** — the window never freezes, the log streams live, a progress bar shows where it is, and **Stop** cancels it (and kills any tool it started).
+* **Nothing changes until you confirm.** Anything that modifies the PC asks first; dangerous actions are red and say exactly what they do. Read-only checks just run.
+* Every session is written to `logs\PCNAME-date.log`. **Copy log / Save log** put the whole log on the clipboard or in a file.
+* Everything the tool changes is collected as **"work done"** and printed on the customer handover sheet.
 
-**Nothing changes until you confirm.** Every option that would modify the PC previews exactly what it plans to do, then asks Y/N. Read-only actions (scans, checks, lists) just run.
+---
 
-Administrator rights are requested once at startup. Decline and it still opens in read-only mode — checking, scanning and reporting work, changes are disabled.
+## Pages
 
-### What each section does
-
-**[3] Network** — the read-only internet check; **scan the network** (lists every live PC with its name, MAC and ping, marks the PC you're on `<< THIS PC`, and flags names already using your prefix — so you see what's taken before renaming); the visibility fix; **create a shared folder** (folder + SMB share + Everyone read/write + discovery, then prints the `\\PC\Share` path); enable Remote Desktop (warns first); and connection details.
-
-**[4] Printers & scanners** — **find** printers/scanners on the LAN (probes ports 9100/515/631 and SNMP for the model, plus eSCL for scanners); **add a printer** driverless over IPP using the built-in Microsoft IPP Class Driver — no download needed on modern MFPs; **install / find a driver** (opens the official page for Samsung MultiXpress, Kyocera ECOSYS, Develop ineo+, or asks Windows Update); **test print**; **add a scanner** over eSCL/WSD; and list installed printers. Auto-driver-download from vendor sites isn't reliably possible, so the honest path is driverless-first → Windows Update → open the exact official page.
-
-**[7] Maintenance** — clean temp files (user + Windows temp), empty the Recycle Bin (permanent, confirmed), clear the Windows Update cache, clear extras (Prefetch/thumbnails/delivery), or clean everything; plus **Windows Defender** and **Windows Update** on/off toggles. Defender detects Tamper Protection and reports whether the change actually stuck; Update offers a 7-day pause and notes Windows may re-enable it.
-
-**[3] Network → Remote Desktop** warns first and refuses to pretend a Public network is safe; connection details show hostname, every IP, RDP state and who is logged on.
-
-**[4] Standard PC setup** — the repetitive jobs on a new office PC, each confirmed separately: never-sleep power plan, time zone + clock resync, computer description, map a network drive, add a network printer.
-
-**[5] Health check** — entirely read-only. Windows build and uptime, activation status, disk SMART health, free space with a low-space flag, antivirus, BitLocker, pending-reboot detection, battery, and a count of critical events in the last 7 days.
-
-**[6] System info + handover report** — full specification, then writes a customer handover sheet to `handover\` carrying your CR, Maroof number, site and contact details, what the PC was called before and after, its specs and the network as handed over. Proof of work to leave behind.
+| Page | What it does |
+|---|---|
+| **Dashboard** | Name, model, serial, Windows + build, activation, CPU, RAM, storage, IP, internet, antivirus/firewall, driver problems, UEFI / Secure Boot / TPM, uptime and pending restart — read only. |
+| **Quick setup** | The post-format checklist. Tick what this PC needs and run it all in one go: restore a backup, rename, time zone, never-sleep, network visibility, allow ping, Remote Desktop, Explorer settings, Fast Startup off, Arabic keyboard, .NET 3.5, remove junk apps, shared folder, install apps, activate Windows, all Windows updates, driver updates, cleanup, restore point, handover sheet. **Presets** save the ticks + app choices ("Office PC", "Reception") for the next PC. |
+| **Apps** | ~50 popular apps by category (browsers, Office/PDF, 7-Zip/WinRAR, VLC, WhatsApp/Zoom/Teams, AnyDesk/RustDesk, VC++/.NET/Java runtimes, IT tools…) installed silently with **winget**. Install / repair winget itself, update all apps, search and install any winget ID, save the app list on the old PC and install the same list on the new one, run every installer in a USB folder, remove built-in junk apps. Add your own apps with `tqny-apps.csv`. |
+| **Windows Update** | Check, install all (one by one, with progress), drivers from Windows Update, optional Office/Microsoft Update, history, pause 7 days, resume, off, reset Windows Update components. Uses the built-in Windows Update Agent — no module to install. |
+| **PC setup** | Rename (registry-checked, below), description, workgroup / domain join, time zone + clock sync, regional format, Arabic keyboard, power (never sleep, high performance, Fast Startup, hibernation, lid), Explorer (extensions, hidden files, This PC, desktop icons, Win11 classic right-click menu, taskbar left), local users (create, password, admin, built-in Administrator), .NET 3.5, restore point. |
+| **Network** | The read-only internet check, connection details, adapters, public IP, ping / trace / DNS / port test, **network scan**, static IP or DHCP, DNS presets (Google, Cloudflare, Quad9, OpenDNS, AdGuard), repairs (flush DNS, renew, proxy reset, restart adapters, Winsock/TCP-IP reset), make visible, Private/Public, Remote Desktop, hosts file. |
+| **Wi-Fi** | Status, networks in range, connect (WPA2/WPA3/open/hidden), **saved Wi-Fi passwords**, back up every network to a folder and restore after the format, forget, Wi-Fi report. |
+| **Sharing** | Create a shared folder (Everyone RW, Everyone read-only, or one user with a password — also the scan-to-folder setup for MFPs), list / stop shares, password-protected sharing ON/OFF, the **Windows 11 24H2 "cannot access NAS / old share" fix** (guest + SMB signing), SMB1 on/off, saved logins for servers, map / disconnect network drives. |
+| **Printers** | Find printers & scanners (ports 9100/515/631, SNMP model, eSCL), add by **IPP driverless**, TCP/IP + driver, or `\\PC\Printer`, test page, default printer (and stop Windows changing it), share, remove, clear stuck jobs, restart spooler, **fix 0x0000011b / 0x00000709 / 0x00000bcb**, vendor driver pages (HP/Samsung, Kyocera, Develop, Konica Minolta, Canon, Epson, Brother, Ricoh, Xerox, Sharp, Lexmark), install a driver from a folder, Windows Fax and Scan. |
+| **Security** | Firewall status / on / off per profile, allow ping, open ports, allow a program, TQNY rules (all rules this tool adds are in group `TQNY`), reset; Defender status, quick / full scan, signature update, real-time on/off (Tamper-aware), exclusions; BitLocker status, **recovery keys**, suspend, turn off. |
+| **Activation** | Windows status, the OEM key stored in the BIOS, activate with a key or with the BIOS key; Office status and activation. Genuine keys only. |
+| **Drivers** | Devices with problems (code 28 etc.), installed third-party drivers, rescan, drivers from Windows Update, the manufacturer's support page for this exact model, Intel / AMD / NVIDIA pages, **back up all drivers and install them from a folder after the format**. |
+| **Backup and restore** | Before the format: user folders (follows OneDrive redirection), browser bookmarks, Wi-Fi + passwords, drivers, the app list, printers with ports and drivers (PrintBrm), Outlook signatures / PST / Sticky Notes, and a PC-info file with the OEM key, BitLocker keys, mapped drives and IP settings. After the format: put it all back. Copies only — never deletes. |
+| **Repair** | DISM + SFC, check disk / schedule full repair, optimise drives, reset Windows Update, reset network, restart Explorer, rebuild icon cache, repair Start menu, reset Store, repair Windows Time, recent errors, blue screens, reliability history; restart now / **into BIOS** / into Advanced Startup / Safe Mode, memory test. |
+| **Cleanup** | Temp, Windows Update cache, Prefetch / thumbnails / delivery cache, Disk Cleanup (all safe options — never Downloads), WinSxS, Recycle Bin; shows MB freed. Biggest files, startup apps. |
+| **Reports** | **Customer handover sheet** — printable HTML (+ .txt) with your company details, customer, spec, network as handed over, and every change made this session. System info, health check, battery report, installed programs CSV. |
+| **Tools** | One click to Device Manager, Disk Management, Services, Event Viewer, Registry, Group Policy, Credential Manager, admin CMD / PowerShell and more; Sysinternals Autoruns / Process Explorer / TCPView on demand; the classic console menu. |
+| **Names and settings** | The name registry (list, release, open), name prefix, registry file (local or on a share), technician name and site code (remembered), data folder. |
 
 ---
 
 ## How name collisions are prevented
 
-Two independent gates must agree before a number is used.
+Unchanged from v3.x, and shared with the classic tool:
 
-**Gate 1 — the registry file.** `TQNY-Names.csv` sits next to the script and records every number ever handed out. The tool takes the lowest number not already used *by that prefix*. Numbers stay reserved even when the PC is powered off or at another site.
-
-**Gate 2 — the live network.** Before committing, the tool asks the network whether the name already answers. If a `TQNY-04` replies — a machine whose registry row was lost — that number is marked taken and it moves on.
-
-Machines are identified by a hardware fingerprint from the onboard NIC, so:
-
-- Re-running on the same PC returns the **same name**. It never burns a second number.
-- **Virtual adapters are deliberately ignored.** VMware, VirtualBox, Hyper-V and Tailscale adapters report as physical to WMI, and their MACs are *identical on every machine* with those products installed. Fingerprinting one would hand the same name to two different PCs — precisely the failure this tool exists to prevent. Detection uses `Get-NetAdapter -Physical`.
-
-Fallback order if there is no usable NIC: system UUID, then motherboard serial. If none can be read it stops rather than guess.
-
-### Numbered or free-form names
-
-`[2] Rename this PC` offers both:
-
-```
-   [1]  Take the next free number    prefix TQNY, e.g. TQNY-04
-   [2]  Type a name myself           e.g. RECEPTION-PC
-```
-
-A typed name goes through exactly the same safety as a numbered one — Windows naming rules (1–15 chars, letters/digits/hyphens, not all digits, no trailing hyphen), rejected if it is already in the registry, and rejected if it already answers on the network. It is then recorded so it is collision-checked forever after.
-
-Free-form rows are stored with `Number` = `0`, meaning they belong to no numbered sequence: they never consume a number, and the machine is still recognised by fingerprint whatever the current prefix is. Scripted equivalent: `/setname:RECEPTION-PC`.
-
-### Prefixes
-
-Names are `PREFIX-NN`. Change the prefix in the menu (`[7]` → `[2]`), per run with `/prefix:ACME`, or permanently by editing `TQNY_PREFIX` at the top of the script.
-
-**Each prefix numbers independently** — `ACME-01` and `TQNY-01` are different machines and can coexist, so you can keep a separate run of numbers per customer or site.
-
-Prefix rules, because Windows is strict about computer names: letters, digits and hyphens only; not all digits; 12 characters max (the full name cannot exceed 15). A trailing hyphen is ignored.
+* **Gate 1 — the registry file.** `TQNY-Names.csv` next to the tool records every number ever handed out, per prefix. Numbers stay reserved while the PC is off or at another site.
+* **Gate 2 — the live network.** Before committing, the name is looked up on the network. If it already answers, that number is reserved and the next one is tried.
+* Machines are recognised by a **hardware fingerprint** (onboard NIC MAC, then system UUID, then board serial). Virtual adapters (VMware, VirtualBox, Hyper-V, Tailscale) are ignored — their MACs are identical on every PC. Re-running on the same PC returns the same name.
+* **Typed names** (e.g. `RECEPTION-PC`) get the same checks: Windows naming rules, not already in the registry, not answering on the network. They are stored with Number `0`.
+* An atomic lock (`.tqny.lock`) stops two technicians claiming the same number when the registry sits on a share.
+* **Protected PCs** (`$PROTECTED_MACS` / `$PROTECTED_NAMES` at the top of `TQNY-Setup.ps1`, and `PROTECTED_MACS` / `PROTECTED_NAMES` in `TQNY-Classic.bat` — keep both lists the same) are never renamed. **Domain PCs** need the "Domain PC" tick and domain credentials.
+* **Internet launch** has no registry, so renaming is off until you set one (Names and settings, or `$env:TQNY_DB` before the one-liner).
 
 ---
 
-## Renaming is disabled in one-liner mode
+## Files
 
-Launched over the internet there is no registry file reachable, so the tool would be handing out a number it cannot record — exactly how two PCs end up sharing a name. It says so and refuses the rename. The internet check and the visibility fix need no registry and work normally.
-
-To enable renaming, point it at a registry file you control:
-
-```powershell
-$env:TQNY_DB = '\\server\share\TQNY-Names.csv'
-irm https://gist.githubusercontent.com/zw0v/6a91d906258ca360a88265b6dcd28ba6/raw/tqny.ps1 | iex
-```
-
----
-
-## Switches
-
-| Switch | Effect |
+| File | |
 |---|---|
-| *(none)* | Open the menu |
-| `/apply` | Apply the rename and the visibility fix |
-| `/list` | Show the name registry |
-| `/release` | Return this machine's number to the pool |
-| `/prefix:ACME` | Use a different prefix |
-| `/ask` | Ask for the prefix on screen |
-| `/name:07` | Force a specific number |
-| `/setname:NAME` | Use this exact computer name instead of numbering |
-| `/site:JED` | Tag the machine with a site code |
-| `/db:PATH` | Use a different registry file |
-| `/menu` | Force the menu even with other switches |
-| `/remote` | Used by the launcher; disables renaming unless `/db` is given |
-| `/no-share` | Skip the visibility step |
-| `/reboot` / `/no-reboot` | Reboot handling after a rename |
-| `/force-domain` | Allow renaming a domain-joined PC (prompts for credentials) |
+| `TQNY-Setup.ps1` | **The app.** Everything is in this one file. |
+| `TQNY-Setup.bat` | Double-click launcher. Passes v3.2 switches to the classic tool. |
+| `TQNY-Classic.bat` | The v3.2 console menu, kept for scripted use. |
+| `scan-source.ps1`, `printer-scan-source.ps1` | Network / printer scan helpers for the classic tool (the app has its own copy built in). |
+| `tqny.ps1` | The internet one-liner launcher. `$env:TQNY_CLASSIC='1'` opens the classic menu instead. |
+| `push-tqny.bat` | Publishes to the repo **and** the secret gist in one go. Run it after any edit. In a folder that is not a git clone yet, it connects the folder to the repo first. Results go to `push-tqny.log`. |
 
-Exit codes: `0` ok · `1` bad command line or elevation refused · `2` no readable hardware ID · `3` allocation failed · `4` rename failed · `5` registry lock unavailable.
+Data the app writes, next to the tool (or in `C:\ProgramData\TQNY-Setup` when launched from the internet): `logs\`, `handover\`, `presets\`, `reports\`, `tools\`, `tqny-settings.json`, and the registry `TQNY-Names.csv`. Customer data is `.gitignore`d.
 
----
+Your own apps for the Apps page: `tqny-apps.csv` next to the tool:
 
-## What the visibility fix actually changes
-
-- Sets the connected **physical** adapter to the Private profile. Virtual adapters are left alone.
-- Enables the Network Discovery and File and Printer Sharing firewall groups **for Private only**. Public stays locked down. Uses language-independent group IDs (`@FirewallAPI.dll,-32752` / `-28502`) so it works on non-English Windows.
-- Sets discovery services to start automatically so visibility survives a reboot: `FDResPub`, `fdPHost`, `SSDPSRV`, `upnphost`, `LanmanServer`, `LanmanWorkstation`.
-
-It does **not** create, remove or alter any shared folder, and does **not** enable SMB1.
-
-## What the internet check does
-
-Reports adapter, link speed, IPv4, DHCP state, gateway, DNS servers and profile, then tests four things separately so you can tell which layer is broken: gateway reply, `1.1.1.1` reply (routing, no DNS), DNS resolution, and a real web fetch. A `169.254.x.x` address is flagged as DHCP not answering.
-
-It never runs `flushdns`, never renews DHCP, and never resets the network stack.
+```
+Category,Name,Id,Source
+Engineering,FreeCAD,FreeCAD.FreeCAD,
+Chat,Discord,Discord.Discord,
+```
 
 ---
 
 ## Safety
 
-- **Protected machines.** `PROTECTED_NAMES` / `PROTECTED_MACS` at the top of the script list PCs that must never be renamed. On those the menu shows the rename option in red as blocked, the rename is refused even with `/apply`, and no number is consumed.
-- **Domain-joined PCs** are refused by default — renaming without domain credentials breaks the AD computer account. `/force-domain` overrides and prompts for credentials.
-- **Concurrent technicians.** Put the registry on a share and point both copies at it. An atomic lock is held during allocation, so two people cannot claim the same number.
-- The registry CSV, the logs and the handover sheets are `.gitignore`d — they hold customer machine data and are never published.
-- **Hosting.** The repo is private. Distribution is a **secret gist**: not listed on the profile, not indexed by search, reachable only by its link. That is *hidden, not secure* — anyone given the link can read it and pass it on. There are no credentials or customer data in the script, so this is an acceptable trade, but it is not access control.
-- Run `push-tqny.bat` after editing, so the private repo and the gist cannot drift apart. The raw URL is cached for roughly 5 minutes.
+* The internet check, network scan, printer scan, health check and every "show / list / status" button are **read only**.
+* No piracy: activation uses genuine product keys only.
+* Firewall rules the tool adds are all in group `TQNY`, so "Remove TQNY rules" takes away exactly what it added.
+* Backup and restore **copy**; they never delete. Disk Cleanup never touches the Downloads folder or the Recycle Bin (that is a separate, confirmed, red option).
+* Hosting is a **secret gist**: not listed, not indexed, reachable only by its link — hidden, not secure. There are no credentials or customer data in the files.
 
-## Files
+## Notes when editing
 
-The network and printer scans live in two helper scripts that must sit **next to** `TQNY-Setup.bat`: `scan-source.ps1` and `printer-scan-source.ps1`. Locally they're in the folder; the one-liner downloads them alongside the `.bat`; the gist carries all of them. If a helper is missing, only that scan reports it — the rest of the tool runs. Run `push-tqny.bat` after any edit to update both the private repo and the gist so they never drift.
+* `TQNY-Setup.ps1` is **pure ASCII** on purpose: Windows PowerShell 5.1 reads BOM-less files as ANSI, so any fancy character (— ’ ✓) would turn into garbage.
+* Keep the `.bat` files with **CRLF** line endings — `cmd.exe` seeks labels by byte offset. `.gitattributes` enforces this, `push-tqny.bat` re-normalises, and the launcher fixes downloads.
+* Inside the app, background jobs only see `$sync`, `$Cfg`, `$Facts` and their parameters (`$P`). Add new worker functions inside `$WorkerLib`; add buttons with `Add-Tiles` on a page.
 
-## Note when editing
+---
 
-Keep the `.bat` saved with **CRLF** line endings. `cmd.exe` seeks labels by byte offset, so a `.bat` with Unix line endings jumps to the wrong lines and misbehaves in ways that look like logic bugs. `.gitattributes` enforces this, and the launcher re-normalises after download.
+## What's new in v4.0
 
-Inside `%PS% "..."` blocks use a plain `|` — the surrounding double quotes already protect it from cmd. A `^|` there passes a stray caret to PowerShell and breaks the pipe. `^|` is only needed inside `for /f (...)` command contexts.
+* A real Windows app window instead of the cmd menu, with background jobs, live log, progress and Stop.
+* New pages: Quick setup (with presets), Apps (winget), Windows Update, Wi-Fi, Sharing, Security, Activation, Drivers, Backup and restore, Repair, Cleanup, Tools.
+* Fixes over v3.2: driverless printers now really use IPP (`Add-Printer -IppURL`); shares work on Arabic Windows (the Everyone group is resolved from its SID); the rename fallback uses CIM instead of `wmic` (removed in Windows 11 24H2); handover sheets are no longer lost when launched from the internet; mapped drives made from the elevated tool show up in Explorer.
+* v3.2 is preserved as `TQNY-Classic.bat`, and all its switches still work through `TQNY-Setup.bat`.

@@ -12,3 +12,14 @@ handover/
 
 # Lock directory created while allocating a number.
 .tqny.lock/
+
+# v4.0 app data: settings (technician name), presets, reports, downloaded
+# Sysinternals tools and temp files. Customer data never goes to GitHub.
+tqny-settings.json
+reports/
+tools/
+tmp/
+installers/
+
+push-tqny.log
+COMMIT-MESSAGE.txt
